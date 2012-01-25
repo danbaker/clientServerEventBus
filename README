@@ -1,0 +1,5 @@
+This project is a Pub/Sub (public/subscribe) Event-Bus.
+The interesting part is it allows events to be subscribed-to on client or server
+and published from client or server.
+Thus, a client could simply publish end-user events and have them processed on the server.
+As the server processes events, it can publish events and have client(s) react.
