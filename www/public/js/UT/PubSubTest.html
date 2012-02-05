@@ -1,0 +1,72 @@
+<html>
+<head>
+<script src="PubSub.js"></script>
+</head>
+<body>
+Hello world
+<script>
+	var pb = new UT.PubSub.create();
+	var n = pb.publish("EventA");
+	if (n !== 0) console.log("ERROR: published EventA appears to have been responded to");
+
+	var cntEventA = 0;
+	var msgEventA = "";
+	fnEventA = function(arg) {
+		cntEventA++;
+		msgEventA += "1";
+	};
+	fnEventA2 = function(arg) {
+		msgEventA += "2";
+	};
+	fnEventA3 = function(arg) {
+		msgEventA += "3";
+	};
+
+	pb.subscribe("EventA", fnEventA);
+	n = pb.publish("EventA");
+	if (n !== 1) console.log("ERROR: published EventA appears to not have been responded to");
+	if (cntEventA !== 1) console.log("ERROR: EventA did not call fnEventA");
+	n = pb.publish("EventA");
+	if (n !== 1) console.log("ERROR: published EventA appears to not have been responded to");
+
+	pb.subscribe("EventA", fnEventA2, null, 7);
+	msgEventA = "";
+	n = pb.publish("EventA");
+	if (n !== 2) console.log("ERROR: published EventA appears to not have been responded to by 2");
+	if (msgEventA !== "12") console.log("ERROR: published EventA appears to not run in priority order: "+msgEventA);
+
+	pb.subscribe("EventA", fnEventA3, null, 3);
+	msgEventA = "";
+	n = pb.publish("EventA");
+	if (n !== 3) console.log("ERROR: published EventA appears to not have been responded to by 3");
+	if (msgEventA !== "312") console.log("ERROR: published EventA appears to not run in priority order: "+msgEventA);
+
+	var cntEventB = 0;
+	fnEventB = function(arg) {
+		cntEventB += arg.n;
+	};
+
+	var n = pb.publish("EventB");
+	if (n !== 0) console.log("ERROR: published EventB appears to have been responded to");
+
+	pb.subscribe("EventB", fnEventB);
+	n = pb.publish("EventB", {n:5});
+	if (n !== 1) console.log("ERROR: published EventB appears to have been responded to 1!=="+n);
+	if (cntEventB !== 5) console.log("ERROR: published EventB appears to run wrong.  5!=="+ncntEventB);
+
+	cntEventB = 0;
+	pb.subscribe("EventB", fnEventB);
+	n = pb.publish("EventB", {n:3});
+	if (n !== 2) console.log("ERROR: published EventB appears to have been responded to 1!=="+n);
+	if (cntEventB !== 6) console.log("ERROR: published EventB appears to run wrong.  5!=="+ncntEventB);
+
+	cntEventB = 0;
+	pb.subscribe("EventB", fnEventB);
+	n = pb.publish("EventB", {n:2});
+	if (n !== 3) console.log("ERROR: published EventB appears to have been responded to 1!=="+n);
+	if (cntEventB !== 6) console.log("ERROR: published EventB appears to run wrong.  5!=="+ncntEventB);
+
+	pb.debugDump();
+</script>
+</body>
+</html>
