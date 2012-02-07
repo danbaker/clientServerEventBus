@@ -20,7 +20,7 @@ UT.PubSub.prototype.init = function() {
 	this._events = {};			// eventID: { subscriptions: ... }
 	
 	// collection of handles and objects (key is handle, value is eventObj)
-	this._handles = {};			// eventHandle: { eventID:eventID, priority:N }
+	this._handles = {};			// eventHandle: { eventID:eventID, priority:N } --OR-- { eventID:eventID, veto:true }
 	
 	// a unique value to identify subscribed-to events (key into _handles)
 	this._nextHandle = 1;
@@ -49,14 +49,7 @@ UT.PubSub.prototype.subscribe = function(eventID, fn, obj, priority) {
 	this._handles[returnHandle] = evtData;
 
 	// 1) find or create the event
-	evt = this._events[eventID];
-	if (!evt) {
-		// not found, create the event
-		this._events[eventID] = {};
-		evt = this._events[eventID];
-		evt.subscribers = {};			// collection of functions to call-on-publish
-		evt.subscribers.pri = [];		// priority-ordered functions
-	}
+	evt = this._createEvent(eventID);
 	
 	// 2) add to subscriber list of the event
 	if (!evt.subscribers.pri[priority]) {
@@ -69,15 +62,61 @@ UT.PubSub.prototype.subscribe = function(eventID, fn, obj, priority) {
 
 /**
  * Setup to allow veto-power over a published event (allows for cancelling of events)
- * @param {*} handle  The event-handle to a previously subscribed-to event
+ * @param {*} eventID  The id(name) of the event to listen/watch for (usually a string)
  * @param {Function} fn  The function to call to check if the event should be veto'ed
  * @param {Object=} obj  The object that the function is a part of (the "this" ptr for the function)
- * example:  var doVeto = fn(event, justChecking);
+ * example:  var doVeto = fn("eventA", justChecking);
  *		justChecking = a boolean.  true means someone called checkEvent, not publish.
  */
-UT.PubSub.prototype.allowVeto = function(handle, fn, obj) {
-	// 1) find event
+UT.PubSub.prototype.addVetoCheck = function(eventID, fn, obj) {
+	var evt;
+	var evtData;
+	var returnHandle = this._nextHandle;	// get unique handle
+	this._nextHandle++;
+	// 1) find or create the event
+	evt = this._createEvent(eventID);
+	if (!evt.vetoers) {
+		evt.vetoers = [];					// collection of functions to call-on-publish to check for veto
+	}
 	// 2) add to veto list
+	evt.vetoers.push( { fn:fn, obj:obj, handle:returnHandle } );
+	// 3) save data into handles map
+	evtData = { eventID:eventID, veto:true };	// eventID:eventID, veto:true
+	this._handles[returnHandle] = evtData;
+	
+	return returnHandle;
+};
+
+UT.PubSub.prototype.removeVetoCheck = function(handle) {
+	var evt;
+	var evtData;
+	var arr;
+	var idx;
+	// 1) find the veto data via the handle-map
+	evtData = this._handles[handle];				// { eventID: eventID, veto:true }
+	if (evtData) {
+		// 2) find the event
+		evt = this._events[evtData.eventID];
+		if (evt && evt.vetoers) {
+			// 3) walk the list of vetoers looking for specific handle
+			arr = evt.vetoers;
+			for(idx=0; idx<arr.length; idx++) {
+				if (arr[idx].handle === handle) {
+					// requested veto handle found
+					if (arr.length <= 1) {
+						// removing last vetoer
+						delete evt.vetoers;
+					} else {
+						// remove this one vetoer from the array
+						arr.splice(idx, 1);
+					}
+					// last) remove the handle data from _handles
+					delete this._handles[handle];
+					break;
+				}
+			}
+		}
+	}
 };
 
 /**
@@ -111,13 +150,11 @@ UT.PubSub.prototype.unsubscribe = function(handle) {
 					// remove this one subscription from the array of this priority
 					arr.splice(idx, 1);
 				}
+				// last) remove the handle data from _handles
+				delete this._handles[handle];
 			}
 		}
-		// 3) remove "handle" from vetoers
-		// @TODO ...
 	}
-	// last) remove the handle data from _handles
-	delete this._handles[handle];
 };
 
 /**
@@ -172,6 +209,21 @@ UT.PubSub.prototype.publish = function(eventID, args) {
 	// 1) find event
 	evt = this._events[eventID];
 	if (evt && evt.subscribers && evt.subscribers.pri) {
+		// check VETO (return -1 if veto'ed)
+		if (evt.vetoers) {
+			arr = evt.vetoers;
+			// walk every function that asked to be checked for veto
+			for(idx=0; idx<arr.length; idx++) {
+				oneSub = arr[idx];
+				if (oneSub && oneSub.fn) {
+					// check if this one wants to veto
+					if (oneSub.fn.call(oneSub.obj, args)) {
+						// VETO'ED
+						return -1;
+					}
+				}
+			}
+		}
 		pri = evt.subscribers.pri;
 		// walk every priority
 		maxIdx = pri.length;
@@ -182,18 +234,12 @@ UT.PubSub.prototype.publish = function(eventID, args) {
 				for(idx=0; idx<arr.length; idx++) {
 					oneSub = arr[idx];
 					if (oneSub && oneSub.fn) {
-						toCall.push(oneSub);
+						oneSub.fn.call(oneSub.obj, args);
+						returnN += 1;
 					}
-					// @TODO: check VETO (return -1 if veto'ed)
 				}
 			}
 		}
-	}
-	for(idx=0; idx<toCall.length; idx++) {
-		oneSub = toCall[idx];
-		// call the function(fn) within the objec(oneSub,obj) with the arg(args)
-		oneSub.fn.call(oneSub.obj, args);
-		returnN += 1;
 	}
 	return returnN;
 };
@@ -235,6 +281,26 @@ UT.PubSub.prototype._findEventViaHandle = function(handle) {
 };
 
 /**
+ * make sure that an event exists, given an eventID
+ * @param {*} eventID  The event to cause/publish/trigger/fire right now
+ * @return {*} evt  The event data (either created or just returned)
+ */
+UT.PubSub.prototype._createEvent = function(eventID) {
+	var evt;
+	// 1) find or create the event
+	evt = this._events[eventID];
+	if (!evt) {
+		// not found, create the event
+		this._events[eventID] = {};
+		evt = this._events[eventID];
+		evt.subscribers = {};			// collection of functions to call-on-publish
+		evt.subscribers.pri = [];		// priority-ordered functions
+		//evt.vetoers = [];				// collection of functions to call-on-publish to check for veto (created on first veto added)
+	}
+	return evt;
+};
+
+/**
  * dump the entire subscription info to the console
  */
 UT.PubSub.prototype.debugDump = function() {
@@ -268,6 +334,15 @@ UT.PubSub.prototype.debugDump = function() {
 					}
 				}
 			}
+			if (evt && evt.vetoers) {
+				this.log(".. .. VETOERS:");
+				arr = evt.vetoers;
+				// walk every subscription in this priority
+				for(idx=0; idx<arr.length; idx++) {
+					oneSub = arr[idx];
+					this.log(".. .. .. "+idx+":  handle="+oneSub.handle);
+				}
+			}
 		}
 	}
 	// HANDLES
@@ -275,7 +350,7 @@ UT.PubSub.prototype.debugDump = function() {
 	for(handle in this._handles) {
 		if (this._handles.hasOwnProperty(handle)) {
 			evtData = this._handles[handle];			// { eventID:eventID, priority: N }			
-			this.log(".. handle:"+handle+"  eventID="+evtData.eventID+"  priority="+evtData.priority);
+			this.log(".. handle:"+handle+"  eventID="+evtData.eventID+"  priority="+evtData.priority+"  veto="+evtData.veto);
 		}
 	}
 };
