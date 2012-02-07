@@ -22,20 +22,20 @@ Hello world
 		msgEventA += "3";
 	};
 
-	pb.subscribe("EventA", fnEventA);
+	var han1 = pb.subscribe("EventA", fnEventA);
 	n = pb.publish("EventA");
 	if (n !== 1) console.log("ERROR: published EventA appears to not have been responded to");
 	if (cntEventA !== 1) console.log("ERROR: EventA did not call fnEventA");
 	n = pb.publish("EventA");
 	if (n !== 1) console.log("ERROR: published EventA appears to not have been responded to");
 
-	pb.subscribe("EventA", fnEventA2, null, 7);
+	var han2 = pb.subscribe("EventA", fnEventA2, null, 7);
 	msgEventA = "";
 	n = pb.publish("EventA");
 	if (n !== 2) console.log("ERROR: published EventA appears to not have been responded to by 2");
 	if (msgEventA !== "12") console.log("ERROR: published EventA appears to not run in priority order: "+msgEventA);
 
-	pb.subscribe("EventA", fnEventA3, null, 3);
+	var han3 = pb.subscribe("EventA", fnEventA3, null, 3);
 	msgEventA = "";
 	n = pb.publish("EventA");
 	if (n !== 3) console.log("ERROR: published EventA appears to not have been responded to by 3");
@@ -49,24 +49,31 @@ Hello world
 	var n = pb.publish("EventB");
 	if (n !== 0) console.log("ERROR: published EventB appears to have been responded to");
 
-	pb.subscribe("EventB", fnEventB);
+	var han4 = pb.subscribe("EventB", fnEventB);
 	n = pb.publish("EventB", {n:5});
 	if (n !== 1) console.log("ERROR: published EventB appears to have been responded to 1!=="+n);
 	if (cntEventB !== 5) console.log("ERROR: published EventB appears to run wrong.  5!=="+ncntEventB);
 
 	cntEventB = 0;
-	pb.subscribe("EventB", fnEventB);
+	var han5 = pb.subscribe("EventB", fnEventB);
 	n = pb.publish("EventB", {n:3});
 	if (n !== 2) console.log("ERROR: published EventB appears to have been responded to 1!=="+n);
 	if (cntEventB !== 6) console.log("ERROR: published EventB appears to run wrong.  5!=="+ncntEventB);
 
 	cntEventB = 0;
-	pb.subscribe("EventB", fnEventB);
+	var han6 = pb.subscribe("EventB", fnEventB);
 	n = pb.publish("EventB", {n:2});
 	if (n !== 3) console.log("ERROR: published EventB appears to have been responded to 1!=="+n);
 	if (cntEventB !== 6) console.log("ERROR: published EventB appears to run wrong.  5!=="+ncntEventB);
 
+	pb.unsubscribe(han5);
+	pb.unsubscribe(han1);
+	pb.unsubscribe(han2);
+	pb.unsubscribe(han4);
+	pb.unsubscribe(han3);
+	pb.unsubscribe(han6);
 	pb.debugDump();
+	
 </script>
 </body>
 </html>
