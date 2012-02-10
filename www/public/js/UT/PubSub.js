@@ -158,11 +158,13 @@ UT.PubSub.prototype.unsubscribe = function(handle) {
 };
 
 /**
- * check if an event will be processed (if the event has any subscribers)
+ * check if an event will be processed (if the event has any subscribers and no vetoers)
  * @param {*} eventID  The event to check
  * @return {boolean}  true means the event IS VALID (someone is subscribed, and won't be veto'ed)
+ *					  false means VETO'ED
+ *					  null means "no one listening"
  */
-UT.PubSub.prototype.checkEvent = function(eventID) {
+UT.PubSub.prototype.checkEvent = function(eventID, args) {
 	var evt;				// event object
 	var pri;				// collection of subscribers for a single priority
 	var priority;			// a priority value
@@ -172,44 +174,7 @@ UT.PubSub.prototype.checkEvent = function(eventID) {
 	// 1) find event
 	evt = this._events[eventID];
 	if (evt && evt.subscribers && evt.subscribers.pri) {
-		pri = evt.subscribers.pri;
-		for(priority in pri) {
-			if (pri.hasOwnProperty(priority)) {
-				arr = pri[priority];
-				for(idx=0; idx<arr.length; idx++) {
-					oneSub = arr[idx];
-					if (oneSub && oneSub.fn) {
-						// @TODO: IF a veto here, ask them if they will veto this?
-						return true;
-					}
-				}
-			}
-		}
-	}
-	// 2) check veto
-	return false;
-};
-
-/**
- * publish/trigger/fire an event
- * @param {*} eventID  The event to cause/publish/trigger/fire right now
- * @param {*} args  argument with the event (usually a JSON object)
- * @return {number}  The number of subscribers that got the event (0 means no one, -1 means it was veto'ed)
- */
-UT.PubSub.prototype.publish = function(eventID, args) {
-	var returnN = 0;		// total subscribers that got this event (-1 means it was veto'ed)
-	var evt;				// event object
-	var pri;				// collection of subscribers for a single priority
-	var priority;			// a priority value
-	var arr;				// array of subscribers for a single priority
-	var idx;				// index into array
-	var maxIdx;				// length of the array
-	var oneSub;				// one subscription-object
-	var toCall = [];		// array of subscription-obects to call (in order)
-	// 1) find event
-	evt = this._events[eventID];
-	if (evt && evt.subscribers && evt.subscribers.pri) {
-		// check VETO (return -1 if veto'ed)
+		// check VETO
 		if (evt.vetoers) {
 			arr = evt.vetoers;
 			// walk every function that asked to be checked for veto
@@ -219,11 +184,65 @@ UT.PubSub.prototype.publish = function(eventID, args) {
 					// check if this one wants to veto
 					if (oneSub.fn.call(oneSub.obj, args)) {
 						// VETO'ED
-						return -1;
+						return false;
 					}
 				}
 			}
 		}
+		pri = evt.subscribers.pri;
+		for(priority in pri) {
+			if (pri.hasOwnProperty(priority)) {
+				arr = pri[priority];
+				for(idx=0; idx<arr.length; idx++) {
+					oneSub = arr[idx];
+					if (oneSub && oneSub.fn) {
+						// event has at least 1 subscriber and no on veto'ed it
+						return true;
+					}
+				}
+			}
+		}
+	}
+	return null;
+};
+
+/**
+ * publish/trigger/fire an event
+ * @param {*} eventID  The event to cause/publish/trigger/fire right now
+ * @param {*} args  argument with the event (usually a JSON object)
+ * @return {number}  The number of subscribers that got the event (0 means no one, -1 means it was veto'ed)
+ */
+UT.PubSub.prototype.publish = function(eventID, args) {
+	var n = this.checkEvent(eventID, args);
+	if (n === true) {
+		return this.publishNow(eventID, args);	// n SUBSCRIBERS
+		
+	} else if (n === null) {
+		return 0;								// NO SUBSCRIBERS
+		
+	} else {
+		return -1;								// VETO'ED
+	}
+};
+
+/**
+ * publish/trigger/fire an event right now (assumes you already checked for veto)
+ * @param {*} eventID  The event to cause/publish/trigger/fire right now
+ * @param {*} args  argument with the event (usually a JSON object)
+ * @return {number}  The number of subscribers that got the event (0 means no one)
+ */
+UT.PubSub.prototype.publishNow = function(eventID, args) {
+	var returnN = 0;		// total subscribers that got this event (-1 means it was veto'ed)
+	var evt;				// event object
+	var pri;				// collection of subscribers for a single priority
+	var priority;			// a priority value
+	var arr;				// array of subscribers for a single priority
+	var idx;				// index into array
+	var maxIdx;				// length of the array
+	var oneSub;				// one subscription-object
+	// 1) find event
+	evt = this._events[eventID];
+	if (evt && evt.subscribers && evt.subscribers.pri) {
 		pri = evt.subscribers.pri;
 		// walk every priority
 		maxIdx = pri.length;
@@ -242,6 +261,52 @@ UT.PubSub.prototype.publish = function(eventID, args) {
 		}
 	}
 	return returnN;
+};
+
+/**
+ * walk all events, and remove any events that have no subscribers and no veto'ers
+ * Note: this function is useful when dynamic events are created, and they are temporary
+ * @return  The total number of events that were removed
+ */
+UT.PubSub.prototype.removeEmptyEvents = function() {
+	var nRemoved = 0;		// total events removed
+	var eventID;			// ID of event to check for removal
+	var evt;				// evt data of event to check:    { subscribers: {}, vetoers: [] }
+	var pri;				// collection of subscribers for a single priority
+	var priority;			// a priority value
+	var arr;				// array of subscribers for a single priority
+	var idx;				// index into array
+	var maxPri;				// length of the priority array
+	var oneSub;				// one subscription-object
+	var removeNow;			// true means to remove the current event
+	var toRemove = [];		// collection of all eventID's to remove
+	for(eventID in this._events) {
+		if (this._events.hasOwnProperty(eventID)) {
+			evt = this._events[eventID];
+			if (!evt.vetoers || evt.vetoers.length === 0) {
+				// no veto'ers ... check if any subscribers
+				removeNow = true;
+				pri = evt.subscribers.pri;
+				// walk every priority
+				maxPri = pri.length;
+				for(priority=0; priority<maxPri; priority++) {
+					arr = pri[priority];
+					if (arr && arr.length > 0) {
+						removeNow = false;
+						break;
+					}
+				}
+				if (removeNow) {
+					nRemoved++;
+					toRemove.push(eventID);
+				}
+			}
+		}
+	}
+	for(idx=0; idx<toRemove.length; idx++) {
+		delete this._events[toRemove[idx]];
+	}
+	return nRemoved;
 };
 
 /**

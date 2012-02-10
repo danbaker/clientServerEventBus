@@ -166,7 +166,7 @@ Hello world
 	n = pb.publish("EventC", {n:2, veto1:false, veto2:false, veto3:true});
 	if (n !== 2) console.log("ERROR: published EventC appears wrong 2!=="+n);
 	if (cntEventC !== 4) console.log("ERROR: published EventC appears to run wrong.  4!=="+cntEventB);
-	
+
 	pb.unsubscribe(han5);
 	pb.unsubscribe(han1);
 	pb.unsubscribe(han2);
@@ -174,9 +174,13 @@ Hello world
 	pb.unsubscribe(han3);
 	pb.unsubscribe(han6);
 	pb.unsubscribe(han7);
-	pb.removeVetoCheck(han7);
 	pb.unsubscribe(han11);
 	pb.unsubscribe(han12);
+	
+	pb.removeVetoCheck(han7);
+
+	pb.removeEmptyEvents();
+
 	pb.debugDump();
 	
 </script>

@@ -1,14 +1,23 @@
 // UT.EventBus
 // Can create multiple EventBus objects
-// Can use the static default EventBus object (UT.EventBus.main)
-
-// @TODO:
-// 1) Convert this file into UT.PubSub -- a general purpose Pub/Sub utility
-// 2) Create a UT.EventBus -- a specialized Event handler:
-//		*) All eventID's are strings
+// Can use the static default EventBus object (UT.EventBus.getInstance())
+//		*) eventID (string)			// the name of the event ("cmd.file.open")
+//		*) subscribe(...)			// listen/wait for the event to happen
+//		*) publish(now)				// fire/cause the event to happen sometime in the future (or immediately)
+//		*) addVetoCheck(...)		// listen/wait for the event to happen, and possibly cancel/veto it
+//
 //		*) When an eventID is published, an eventObject is created and processed
 //		*) an eventObject can be marked as "processed"
-//		*) EventBus HAS-A UT.PubSub
+//
+// Note about eventID:
+//	eventIDs are strings that are period-separated words (e.g. "cmd.file.open")
+//	each period marks a new event that is published (e.g. "cmd" then "cmd.file" then "cmd.file.open")
+//	when the event is published, ALL events are checked for veto.  Any veto causes the entire event to be vetoed
+//	when the event is published, ALL events are published (allowing a general-purpose "cmd" listener)
+//	Note: this canbe very usefull for macro-recording
+//
+
+
 
 
 if (!UT) UT = {};
@@ -25,148 +34,144 @@ UT.EventBus.create = function() {
 };
 
 UT.EventBus.prototype.init = function() {
-	// the collection of all events registered on this EventBus (key=event, value = object)
-	this._events = {};
+	// create a local PubSub
+	this._pubsub = UT.PubSub.create();
 	
-	// collection of handles and objects
-	this._handles = [];
-	
-	// a unique value to identify subscribed-to events (index into _handles)
-	this._nextHandle = 1;
 };
 
 /**
  * Subscribe to an event
- * @param {*} event  The event to listen/watch for (usually a string)
+ * NOTE: You must specify exactly the eventID you are interested in
+ *			"cmd.file.open"		will ONLY get that exact command-event
+ *			"cmd.file"			will get ALL "file command"-events
+ *			"cmd"				will get ALL "command"-events
+ * @param {string} eventID  The eventID to listen/watch for
  * @param (Function) fn  The function to call when the event is published/fired
  * @param {Object=} obj  The object that the function is a part of (the "this" ptr for the function)
- * @param {Number=} priorty  Way of ordering who gets informed of the event first or last (defaults to 100)
+ * @param {Number=} priorty  Way of ordering who gets informed of the event first or last (2 to 8) default=5
  * @return {*}  Handle to your subscribed-to event
  */
 UT.EventBus.prototype.subscribe = function(event, fn, obj, priority) {
-	var returnHandle;
-	var evt;
-	var evtData;
-	if (!priority || typeof priority != Number) priority = 100;
-	if (priority < 0) priority = 0;
-
-	// create handle data
-	returnHandle = this._nextHandle;
-	this._nextHandle++;
-	evtData = { priority:priority, event:event };
-	this._handles[returnHandle] = evtData;
-
-	// 1) find or create event
-	evt = this._events[event];
-	if (!evt) {
-		this._events[event] = {};
-		evt = this._events[event];
-		evt.subscribers = {};			// collection of functions to call-on-publish
-		evt.subscribers.pri = [];		// priority-ordered functions
+	if (typeof priority === 'number') {
+		if (priority > 8) priority = 8;
+		if (priority < 2) priority = 2;
 	}
-	
-	
-	// 2) add to subscriber list
-	if (!evt.subscribers.pri[priority]) {
-		evt.subscribers.pri[priority] = [];
-	}
-	evt.subscribers.pri[priority].push( { fn:fn, obj:obj } );
-	evtData.evt = evt;
-
-	return returnHandle;
+	return this._pubsub.subscribe(event, fn, obj, priority);
 };
 
 /**
  * Setup to allow veto-power over a published event (allows for cancelling of events)
- * @param {*} handle  The event-handle to a previously subscribed-to event
+ * NOTE: You must specify exactly the eventID you are interested in
+ *			"cmd.file.open"		will ONLY check that exact command-event
+ *			"cmd.file"			will check ALL "file command"-events
+ *			"cmd"				will check ALL "command"-events
+ * @param {string} eventID  The id(name) of the event to listen/watch for
  * @param {Function} fn  The function to call to check if the event should be veto'ed
  * @param {Object=} obj  The object that the function is a part of (the "this" ptr for the function)
- * example:  var doVeto = fn(event, justChecking);
+ * example:  var doVeto = fn("eventA", justChecking);
  *		justChecking = a boolean.  true means someone called checkEvent, not publish.
  */
-UT.EventBus.prototype.allowVeto = function(handle, fn, obj) {
-	// 1) find event
-	// 2) add to veto list
+UT.EventBus.prototype.addVetoCheck = function(eventID, fn, obj) {
+	return this._pubsub.addVetoCheck(eventID, fn, obj);
+};
+
+UT.EventBus.prototype.removeVetoCheck = function(handle) {
+	return this._pubsub.removeVetoCheck(handle);
 };
 
 /**
- * unsubscribe.  quit listening for an event
+ * unsubscribe.  quit listening for an eventID
  * @param {*} handle  The event-handle to a previously subscribed-to event
  */
 UT.EventBus.prototype.unsubscribe = function(handle) {
-	// 1) find event
-	// 2) remove "handle" from subscribers + vetoers
+	return this._pubsub.unsubscribe(handle);
 };
 
 /**
- * check if an event will be processed (if the event is "valid" to run right now)
- * Usually this is used in UI to gray-out actions that are not valid
- * @param {string} event  The event to listen/watch for (usually a string)
- * @return {boolean}  true means the event IS VALID
+ * check if an event will be processed (if the event has any subscribers)
+ * NOTE: You specify the eventID you are interested in, and MULTIPLE events will be checked:
+ *			"cmd.file.open"		will check "cmd" and "cmd.file" and "cmd.file.open"
+ *			"cmd.file"			will check "cmd" and "cmd.file"
+ *			"cmd"				will only check "cmd"
+ * @param {string} eventID  The id(name) of the event to check
+ * @return {boolean}  true means the event IS VALID (someone is subscribed, and won't be veto'ed)
  */
-UT.EventBus.prototype.checkEvent = function(event) {
-	// 1) find event
-	// 2) check veto
+UT.EventBus.prototype.checkEvent = function(eventID) {
+	var events = this._processEventID(eventID);
+	var idx;
+	var returnCode = null;			// defaults to "no one listening"
+	var chk;
+	// check if any event is veto'ed
+	for(idx=0; idx<events.length; idx++) {
+		chk = this._pubsub.checkEvent(events[idx], args);
+		if (chk === false) {
+			// VETOED
+			return false;
+		} else if (chk === true) {
+			// at least 1 subscriber is listening to part of the event (so far, unless get veto'ed)
+			returnCode = true;
+		}
+	}
+	// return either "null=no subscribers"  or  "true=at least 1 subscriber" (known no veto'ers)
+	return returnCode;
 };
 
 /**
- * publish an event
- * @param {*} event  The event to listen/watch for (usually a string)
+ * publish/trigger/fire an event
+ * @param {string} eventID  The id(name) of the event to publish/fire/cause
  * @param {*} args  argument with the event (usually a JSON object)
  * @return {number}  The number of subscribers that got the event (0 means no one, -1 means it was veto'ed)
  */
-UT.EventBus.prototype.publish = function(event, args) {
-	// 1) find event
-	// 2) check veto
-	// 3) call all subscribers
+UT.EventBus.prototype.publish = function(eventID, args) {
+	if (!args) args = {};
+	// has NOT been processed yet
+	args.beenProcessed = false;
+	// the original eventID ("cmd.file.open")
+	args.eventID = eventID;
+	var events = this._processEventID(eventID);
+	var idx;
+	var n = 0;
+	// check if any event is veto'ed
+	for(idx=0; idx<events.length; idx++) {
+		if (this._pubsub.checkEvent(events[idx], args) === false) {
+			// VETOED
+			return -1;
+		}
+	}
+	// publish all events
+	for(idx=0; idx<events.length; idx++) {
+		n += this._pubsub.publishNow(events[idx], args);
+	}
+	return n;
 };
 
 /**
- * find information, given an event handle
- * @private
- * @param {*} handle  The event-handle to a previously subscribed-to event
- * @return {Object}  {  evt:eventData, 
+ * queue up an event to be published later (nothing returned)
+ * @param {string} eventID  The id(name) of the event to publish/fire/cause
+ * @param {*} args  argument with the event (usually a JSON object)
  */
-UT.EventBus.prototype._findEventViaHandle = function(handle) {
+UT.EventBus.prototype.queueEvent = function(eventID, args) {
+	// @TODO: WORK HERE ... ad queue and a way to process queue
 };
 
 
-
-
-
-// // // // // // // // // // // // //
-// 
-//		EventBus 
-//
-
-// EventBus.Event constructor
-UT.EventBus.Event.prototype.init = function() {
-	// the id of the event (the name of the event.  e.g. "cmd_undo")
-	/** @type (string) */
-	this.id;
-	
-	// true means this event has been handled by someone.  others may continue to handle, if they wish
-	/** @type (boolean) */
-	this.handled;
-	
-	// JSON data arguments for the event
-	this.args;
-};
-
-UT.EventBus.prototype.init = function() {
-	// private Pub/Sub handler
-	this._pubsub;
-};
 /**
- * Subscribe to an event
- * @param {string} eventID  The eventID to listen/watch for
- * @param (Function) fn  The function to call when the event is published/fired
- * @param {Object=} obj  The object that the function is a part of (the "this" ptr for the function)
- * @param {Number=} priorty  Way of ordering who gets informed of the event first or last (defaults to 100)
- * @return {*}  Handle to your subscribed-to event
+ * process a single eventID into multiple event IDs (an array of eventID)
+ * @param {string|Array<string>} eventID  The id(name) of the event to publish/fire/cause
+ * @return {Array<string>}  An array of event IDs
  */
-UT.EventBus.prototype.subscribe = function(event, fn, obj, priority) {
+UT.EventBus.prototype._processEventID = function(eventID) {
+	if (typeof(eventID === 'string')) {				// "cmd.file.open"
+		var arr = eventID.split(".");				// ["cmd", "file", "open"]
+		var str = arr[0];
+		for(var idx=1; idx<arr.length; idx++) {
+			str += "." + arr[idx];
+			arr[idx] = str;
+		}
+		return arr;									// ["cmd", "cmd.file", "cmd.file.open"]
+	}
+	return eventID;
 };
 
-// NOTES: Question:  Is PubSub an EventBus in itself ???
+
 
