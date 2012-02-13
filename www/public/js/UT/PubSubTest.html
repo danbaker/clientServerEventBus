@@ -9,16 +9,21 @@ Hello world
 	var n = pb.publish("EventA");
 	if (n !== 0) console.log("ERROR: published EventA appears to have been responded to");
 
+	fnSlowHandler = function(info, eventID, args) {
+//		console.log("SLOW HANDLER CALLED FOR: eventID="+eventID);
+	};
+	pb.setSlowDelegate(fnSlowHandler);
+
 	var cntEventA = 0;
 	var msgEventA = "";
-	fnEventA = function(arg) {
+	fnEventA = function(eventID, arg) {
 		cntEventA++;
 		msgEventA += "1";
 	};
-	fnEventA2 = function(arg) {
+	fnEventA2 = function(eventID, arg) {
 		msgEventA += "2";
 	};
-	fnEventA3 = function(arg) {
+	fnEventA3 = function(eventID, arg) {
 		msgEventA += "3";
 	};
 
@@ -42,7 +47,7 @@ Hello world
 	if (msgEventA !== "312") console.log("ERROR: published EventA appears to not run in priority order: "+msgEventA);
 
 	var cntEventB = 0;
-	fnEventB = function(arg) {
+	fnEventB = function(eventID, arg) {
 		cntEventB += arg.n;
 	};
 
@@ -66,7 +71,7 @@ Hello world
 	if (n !== 3) console.log("ERROR: published EventB appears to have been responded to 1!=="+n);
 	if (cntEventB !== 6) console.log("ERROR: published EventB appears to run wrong.  5!=="+ncntEventB);
 
-	var fnEventBVeto = function(args) {
+	var fnEventBVeto = function(eventID, args) {
 		return args.veto;
 	};
 
@@ -86,18 +91,24 @@ Hello world
 	if (n !== 3) console.log("ERROR: published EventA appears to not have been responded to by 3");
 	if (msgEventA !== "312") console.log("ERROR: published EventA appears to not run in priority order: "+msgEventA);
 
+	pb.subscribeSlow("EventA");
+	msgEventA = "";
+	n = pb.publish("EventA");
+	if (n !== 4) console.log("ERROR: published EventA appears to not have been responded to by 3");
+	if (msgEventA !== "312") console.log("ERROR: published EventA appears to not run in priority order: "+msgEventA);
+	pb.unsubscribeSlow("EventA");
 
 	var cntEventC = 0;
-	var fnEventC = function(args) {
+	var fnEventC = function(eventID, args) {
 		cntEventC += args.n;
 	};
-	var fnEventCVeto1 = function(args) {
+	var fnEventCVeto1 = function(eventID, args) {
 		return args.veto1;
 	};
-	var fnEventCVeto2 = function(args) {
+	var fnEventCVeto2 = function(eventID, args) {
 		return args.veto2;
 	};
-	var fnEventCVeto3 = function(args) {
+	var fnEventCVeto3 = function(eventID, args) {
 		return args.veto3;
 	};
 

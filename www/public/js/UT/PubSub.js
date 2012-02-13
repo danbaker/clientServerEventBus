@@ -9,21 +9,53 @@ var UT = UT || {};
  */
 UT.PubSub = function() {};
 
+/**
+ * main create method (see getInstance too)
+ * @return {UT.PubSub}
+ */
 UT.PubSub.create = function() {
 	var res = new UT.PubSub();
 	res.init();
 	return res;
 };
 
+/**
+ * To use the "main singleton" PubSub
+ * @return {UT.PubSub}
+ */
+UT.PubSub.getInstance = function() {
+	if (!UT.PubSub._singleton) {
+		UT.PubSub._singleton = UT.PubSub.create();
+	}
+	return UT.PubSub._singleton;
+};
+
 UT.PubSub.prototype.init = function() {
 	// the collection of all events registered on this PubSub (key=eventID, value = object)
-	this._events = {};			// eventID: { subscriptions: ... }
+	this._events = {};			// eventID: { subscriptions:..., vetoers:..., slow:true }
 	
 	// collection of handles and objects (key is handle, value is eventObj)
 	this._handles = {};			// eventHandle: { eventID:eventID, priority:N } --OR-- { eventID:eventID, veto:true }
 	
+	// slow-connection delegate info
+	this._slowFn = null;		// function to call
+	this._slowObj = null;		// object to call function on
+	
 	// a unique value to identify subscribed-to events (key into _handles)
-	this._nextHandle = 1;
+	if (!UT.PubSub._nextHandle) {
+		UT.PubSub._nextHandle = 1;
+	}
+};
+
+/**
+ * Set the delegate to handle the slow-connection (e.g. socket connection to a server)
+ * NOTE: function({publish:true}, eventID, {args...})
+ * @param (Function) fn  The function to call to handle calls to the server
+ * @param {Object=} obj  The object that the function is a part of (the "this" ptr for the function)
+ */
+UT.PubSub.prototype.setSlowDelegate = function(fn, obj) {
+	this._slowFn = fn;
+	this._slowObj = obj;
 };
 
 /**
@@ -43,8 +75,7 @@ UT.PubSub.prototype.subscribe = function(eventID, fn, obj, priority) {
 	if (priority > 9) priority = 9;
 
 	// create handle data to return
-	returnHandle = this._nextHandle;
-	this._nextHandle++;
+	returnHandle = this.getNextHandle();
 	evtData = { priority:priority, eventID:eventID };	// eventID:eventID, priority:N
 	this._handles[returnHandle] = evtData;
 
@@ -61,6 +92,30 @@ UT.PubSub.prototype.subscribe = function(eventID, fn, obj, priority) {
 };
 
 /**
+ * Subscribe to an event by name (via a known slow-connection, like socket)
+ * Note: when this eventID is published, it will also be published via the slow-connection
+ * @param {*} eventID  The id(name) of the event to pass to the known slow-connection)
+ */
+UT.PubSub.prototype.subscribeSlow = function(eventID) {
+	var evt;
+	// 1) find or create the event
+	evt = this._createEvent(eventID);
+	evt.slow = true;
+};
+
+/**
+ * UNSubscribe to an event by name (via a known slow-connection, like socket)
+ * Note: stop passing this event to the slow-connection
+ * @param {*} eventID  The id(name) of the event to STOP passing to the known slow-connection)
+ */
+UT.PubSub.prototype.unsubscribeSlow = function(eventID) {
+	var evt;
+	// 1) find or create the event
+	evt = this._createEvent(eventID);
+	evt.slow = undefined;
+};
+
+/**
  * Setup to allow veto-power over a published event (allows for cancelling of events)
  * @param {*} eventID  The id(name) of the event to listen/watch for (usually a string)
  * @param {Function} fn  The function to call to check if the event should be veto'ed
@@ -71,8 +126,7 @@ UT.PubSub.prototype.subscribe = function(eventID, fn, obj, priority) {
 UT.PubSub.prototype.addVetoCheck = function(eventID, fn, obj) {
 	var evt;
 	var evtData;
-	var returnHandle = this._nextHandle;	// get unique handle
-	this._nextHandle++;
+	var returnHandle = this.getNextHandle();	// get unique handle
 	// 1) find or create the event
 	evt = this._createEvent(eventID);
 	if (!evt.vetoers) {
@@ -182,7 +236,7 @@ UT.PubSub.prototype.checkEvent = function(eventID, args) {
 				oneSub = arr[idx];
 				if (oneSub && oneSub.fn) {
 					// check if this one wants to veto
-					if (oneSub.fn.call(oneSub.obj, args)) {
+					if (oneSub.fn.call(oneSub.obj, eventID, args)) {
 						// VETO'ED
 						return false;
 					}
@@ -242,22 +296,28 @@ UT.PubSub.prototype.publishNow = function(eventID, args) {
 	var oneSub;				// one subscription-object
 	// 1) find event
 	evt = this._events[eventID];
-	if (evt && evt.subscribers && evt.subscribers.pri) {
-		pri = evt.subscribers.pri;
-		// walk every priority
-		maxIdx = pri.length;
-		for(priority=0; priority<maxIdx; priority++) {
-			arr = pri[priority];
-			if (arr) {
-				// walk every subscription in this priority
-				for(idx=0; idx<arr.length; idx++) {
-					oneSub = arr[idx];
-					if (oneSub && oneSub.fn) {
-						oneSub.fn.call(oneSub.obj, args);
-						returnN += 1;
+	if (evt) {
+		if (evt.subscribers && evt.subscribers.pri) {
+			pri = evt.subscribers.pri;
+			// walk every priority
+			maxIdx = pri.length;
+			for(priority=0; priority<maxIdx; priority++) {
+				arr = pri[priority];
+				if (arr) {
+					// walk every subscription in this priority
+					for(idx=0; idx<arr.length; idx++) {
+						oneSub = arr[idx];
+						if (oneSub && oneSub.fn) {
+							oneSub.fn.call(oneSub.obj, eventID, args);
+							returnN += 1;
+						}
 					}
 				}
 			}
+		}
+		if (evt.slow && this._slowFn) {
+			this._slowFn.call(this._slowObj, {publish:true}, eventID, args);
+			returnN += 1;
 		}
 	}
 	return returnN;
@@ -284,21 +344,25 @@ UT.PubSub.prototype.removeEmptyEvents = function() {
 		if (this._events.hasOwnProperty(eventID)) {
 			evt = this._events[eventID];
 			if (!evt.vetoers || evt.vetoers.length === 0) {
-				// no veto'ers ... check if any subscribers
-				removeNow = true;
-				pri = evt.subscribers.pri;
-				// walk every priority
-				maxPri = pri.length;
-				for(priority=0; priority<maxPri; priority++) {
-					arr = pri[priority];
-					if (arr && arr.length > 0) {
-						removeNow = false;
-						break;
+				// no veto'ers ... 
+				// check if event is being published to a slow-connection
+				if (!evt.slow) {
+					// check if any subscribers
+					removeNow = true;
+					pri = evt.subscribers.pri;
+					// walk every priority
+					maxPri = pri.length;
+					for(priority=0; priority<maxPri; priority++) {
+						arr = pri[priority];
+						if (arr && arr.length > 0) {
+							removeNow = false;
+							break;
+						}
 					}
-				}
-				if (removeNow) {
-					nRemoved++;
-					toRemove.push(eventID);
+					if (removeNow) {
+						nRemoved++;
+						toRemove.push(eventID);
+					}
 				}
 			}
 		}
@@ -366,6 +430,17 @@ UT.PubSub.prototype._createEvent = function(eventID) {
 };
 
 /**
+ * get the next available handle id
+ * Note: the handles are unique over the entire application
+ * @return {number}  The handle to use
+ */
+UT.PubSub.prototype.getNextHandle = function(e) {
+	var hand = UT.PubSub._nextHandle;
+	UT.PubSub._nextHandle++;
+	return hand;
+};
+
+/**
  * dump the entire subscription info to the console
  */
 UT.PubSub.prototype.debugDump = function() {
@@ -408,6 +483,9 @@ UT.PubSub.prototype.debugDump = function() {
 					this.log(".. .. .. "+idx+":  handle="+oneSub.handle);
 				}
 			}
+			if (evt && evt.slow) {
+				this.log(".. .. PUBLISH TO SLOW");
+			}
 		}
 	}
 	// HANDLES
@@ -417,6 +495,10 @@ UT.PubSub.prototype.debugDump = function() {
 			evtData = this._handles[handle];			// { eventID:eventID, priority: N }			
 			this.log(".. handle:"+handle+"  eventID="+evtData.eventID+"  priority="+evtData.priority+"  veto="+evtData.veto);
 		}
+	}
+	// OTHER
+	if (this._slowFn) {
+		this.log("PubSub has a slow-connection-delegate installed" + (this._slowObj? " with an object" : ""));
 	}
 };
 UT.PubSub.prototype.log = function(msg) {

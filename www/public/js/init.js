@@ -1,6 +1,9 @@
 // THE first JavaScript loaded
 
 setTimeout(function() {
+	// get THE PubSub object
+	var pb = UT.PubSub.getInstance();
+
 	// Connect to the server
 	var socket = io.connect('http://localhost:8765');
 	socket.on('news', function (data) {
@@ -29,13 +32,20 @@ setTimeout(function() {
 		content.innerHTML = txt;
 	};
 	
+	pb.subscribe("cmd.btn.1", function(args) {
+		addMessage("Button 1 Pressed at client");
+	});
+	pb.subscribe("cmd.btn.2", function(args) {
+		addMessage("Button 2 Pressed at client");
+	});
+	
 	var btn1 = document.getElementById("btn1")
 	btn1.onclick = function() {
-		addMessage("Button 1 Pressed at client");
+		pb.publish("cmd.btn.1");
 	};
 	var btn2 = document.getElementById("btn2")
 	btn2.onclick = function() {
-		addMessage("Button 2 Pressed at client");
+		pb.publish("cmd.btn.2");
 	};
 }, 500);
 

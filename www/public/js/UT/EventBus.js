@@ -51,12 +51,29 @@ UT.EventBus.prototype.init = function() {
  * @param {Number=} priorty  Way of ordering who gets informed of the event first or last (2 to 8) default=5
  * @return {*}  Handle to your subscribed-to event
  */
-UT.EventBus.prototype.subscribe = function(event, fn, obj, priority) {
+UT.EventBus.prototype.subscribe = function(eventID, fn, obj, priority) {
 	if (typeof priority === 'number') {
 		if (priority > 8) priority = 8;
 		if (priority < 2) priority = 2;
 	}
-	return this._pubsub.subscribe(event, fn, obj, priority);
+	return this._pubsub.subscribe(eventID, fn, obj, priority);
+};
+
+/**
+ * Subscribe to an event, knowing response time is slow (e.g. over a socket connection)
+ * @param {string} eventID  The eventID to listen/watch for (and pass along over the socket)
+ * @param (Function) fn  The function to call when the event is published/fired
+ * @param {Object=} obj  The object that the function is a part of (the "this" ptr for the function)
+ * @return {*}  Handle to your subscribed-to event
+ */
+UT.EventBus.prototype.subscribeSlow = function(eventID, fn, obj, priority) {
+	var returnHandle = this._pubsub.getNextHandle();
+	var evtData = { eventID:eventID };
+// @TODO: ??? WORK HERE ... DO IN PubSub FIRST ???
+	this._slowHandles[returnHandle] = evtData;
+	this._slowSubscribers[hand] = {};
+	
+	return returnHandle;
 };
 
 /**
