@@ -6,6 +6,7 @@ var express = require('express');
 
 var app = express.createServer();
 var io = require('socket.io').listen(app);
+var utsocket = require('./UT/Socket');
 
 // Configuration
 io.configure(function(){
@@ -36,6 +37,9 @@ app.get('/', function(req, res){
     title: 'UtahJS: PubSub'
   });
 });
+
+var utsock = utsocket.getInstance();
+utsock.listen(io);
 
 app.listen(8765);
 console.log("Express server listening on port %d in %s mode", app.address().port, app.settings.env);

@@ -1,0 +1,199 @@
+<html>
+<head>
+<script src="PubSub.js"></script>
+</head>
+<body>
+Hello world
+<script>
+	var pb = new UT.PubSub.create();
+	var n = pb.publish("EventA");
+	if (n !== 0) console.log("ERROR: published EventA appears to have been responded to");
+
+	fnSlowHandler = function(info, eventID, args) {
+//		console.log("SLOW HANDLER CALLED FOR: eventID="+eventID);
+	};
+	pb.setSlowDelegate(fnSlowHandler);
+
+	var cntEventA = 0;
+	var msgEventA = "";
+	fnEventA = function(eventID, arg) {
+		cntEventA++;
+		msgEventA += "1";
+	};
+	fnEventA2 = function(eventID, arg) {
+		msgEventA += "2";
+	};
+	fnEventA3 = function(eventID, arg) {
+		msgEventA += "3";
+	};
+
+	var han1 = pb.subscribe("EventA", fnEventA);
+	n = pb.publish("EventA");
+	if (n !== 1) console.log("ERROR: published EventA appears to not have been responded to");
+	if (cntEventA !== 1) console.log("ERROR: EventA did not call fnEventA");
+	n = pb.publish("EventA");
+	if (n !== 1) console.log("ERROR: published EventA appears to not have been responded to");
+
+	var han2 = pb.subscribe("EventA", fnEventA2, null, 7);
+	msgEventA = "";
+	n = pb.publish("EventA");
+	if (n !== 2) console.log("ERROR: published EventA appears to not have been responded to by 2");
+	if (msgEventA !== "12") console.log("ERROR: published EventA appears to not run in priority order: "+msgEventA);
+
+	var han3 = pb.subscribe("EventA", fnEventA3, null, 3);
+	msgEventA = "";
+	n = pb.publish("EventA");
+	if (n !== 3) console.log("ERROR: published EventA appears to not have been responded to by 3");
+	if (msgEventA !== "312") console.log("ERROR: published EventA appears to not run in priority order: "+msgEventA);
+
+	var cntEventB = 0;
+	fnEventB = function(eventID, arg) {
+		cntEventB += arg.n;
+	};
+
+	var n = pb.publish("EventB");
+	if (n !== 0) console.log("ERROR: published EventB appears to have been responded to");
+
+	var han4 = pb.subscribe("EventB", fnEventB);
+	n = pb.publish("EventB", {n:5});
+	if (n !== 1) console.log("ERROR: published EventB appears to have been responded to 1!=="+n);
+	if (cntEventB !== 5) console.log("ERROR: published EventB appears to run wrong.  5!=="+ncntEventB);
+
+	cntEventB = 0;
+	var han5 = pb.subscribe("EventB", fnEventB);
+	n = pb.publish("EventB", {n:3});
+	if (n !== 2) console.log("ERROR: published EventB appears to have been responded to 1!=="+n);
+	if (cntEventB !== 6) console.log("ERROR: published EventB appears to run wrong.  5!=="+ncntEventB);
+
+	cntEventB = 0;
+	var han6 = pb.subscribe("EventB", fnEventB);
+	n = pb.publish("EventB", {n:2});
+	if (n !== 3) console.log("ERROR: published EventB appears to have been responded to 1!=="+n);
+	if (cntEventB !== 6) console.log("ERROR: published EventB appears to run wrong.  5!=="+ncntEventB);
+
+	var fnEventBVeto = function(eventID, args) {
+		return args.veto;
+	};
+
+	var han7 = pb.addVetoCheck("EventB", fnEventBVeto);
+	cntEventB = 0;
+	n = pb.publish("EventB", {n:2, veto:false});
+	if (n !== 3) console.log("ERROR: published EventB appears to have been responded to 1!=="+n);
+	if (cntEventB !== 6) console.log("ERROR: published EventB appears to run wrong.  5!=="+ncntEventB);
+
+	cntEventB = 0;
+	n = pb.publish("EventB", {n:2, veto:true});
+	if (n !== -1) console.log("ERROR: published EventB appears to not been vetoed -1!=="+n);
+	if (cntEventB !== 0) console.log("ERROR: published EventB appears to run wrong.  0!=="+cntEventB);
+
+	msgEventA = "";
+	n = pb.publish("EventA");
+	if (n !== 3) console.log("ERROR: published EventA appears to not have been responded to by 3");
+	if (msgEventA !== "312") console.log("ERROR: published EventA appears to not run in priority order: "+msgEventA);
+
+	pb.subscribeSlow("EventA");
+	msgEventA = "";
+	n = pb.publish("EventA");
+	if (n !== 4) console.log("ERROR: published EventA appears to not have been responded to by 3");
+	if (msgEventA !== "312") console.log("ERROR: published EventA appears to not run in priority order: "+msgEventA);
+	pb.unsubscribeSlow("EventA");
+
+	var cntEventC = 0;
+	var fnEventC = function(eventID, args) {
+		cntEventC += args.n;
+	};
+	var fnEventCVeto1 = function(eventID, args) {
+		return args.veto1;
+	};
+	var fnEventCVeto2 = function(eventID, args) {
+		return args.veto2;
+	};
+	var fnEventCVeto3 = function(eventID, args) {
+		return args.veto3;
+	};
+
+	var han8  = pb.addVetoCheck("EventC", fnEventCVeto1);
+	var han9  = pb.addVetoCheck("EventC", fnEventCVeto2);
+	var han10 = pb.addVetoCheck("EventC", fnEventCVeto3);
+	var han11 = pb.subscribe("EventC", fnEventC);
+	var han12 = pb.subscribe("EventC", fnEventC);
+
+	cntEventC = 0;
+	n = pb.publish("EventC", {n:2, veto1:false, veto2:false, veto3:false});
+	if (n !== 2) console.log("ERROR: published EventC appears wrong 1!=="+n);
+	if (cntEventC !== 4) console.log("ERROR: published EventC appears to run wrong.  4!=="+cntEventB);
+
+	cntEventC = 0;
+	n = pb.publish("EventC", {n:2, veto1:true, veto2:false, veto3:false});
+	if (n !== -1) console.log("ERROR: published EventC appears wrong -1!=="+n);
+	if (cntEventC !== 0) console.log("ERROR: published EventC appears to run wrong.  0!=="+cntEventB);
+	cntEventC = 0;
+	n = pb.publish("EventC", {n:2, veto1:false, veto2:true, veto3:false});
+	if (n !== -1) console.log("ERROR: published EventC appears wrong -1!=="+n);
+	if (cntEventC !== 0) console.log("ERROR: published EventC appears to run wrong.  0!=="+cntEventB);
+	cntEventC = 0;
+	n = pb.publish("EventC", {n:2, veto1:false, veto2:false, veto3:true});
+	if (n !== -1) console.log("ERROR: published EventC appears wrong -1!=="+n);
+	if (cntEventC !== 0) console.log("ERROR: published EventC appears to run wrong.  0!=="+cntEventB);
+
+	pb.removeVetoCheck(han9);
+	cntEventC = 0;
+	n = pb.publish("EventC", {n:2, veto1:true, veto2:false, veto3:false});
+	if (n !== -1) console.log("ERROR: published EventC appears wrong -1!=="+n);
+	if (cntEventC !== 0) console.log("ERROR: published EventC appears to run wrong.  0!=="+cntEventB);
+	cntEventC = 0;
+	n = pb.publish("EventC", {n:2, veto1:false, veto2:true, veto3:false});
+	if (n !== 2) console.log("ERROR: published EventC appears wrong 2!=="+n);
+	if (cntEventC !== 4) console.log("ERROR: published EventC appears to run wrong.  4!=="+cntEventB);
+	cntEventC = 0;
+	n = pb.publish("EventC", {n:2, veto1:false, veto2:false, veto3:true});
+	if (n !== -1) console.log("ERROR: published EventC appears wrong -1!=="+n);
+	if (cntEventC !== 0) console.log("ERROR: published EventC appears to run wrong.  0!=="+cntEventB);
+
+	pb.removeVetoCheck(han8);
+	cntEventC = 0;
+	n = pb.publish("EventC", {n:2, veto1:true, veto2:false, veto3:false});
+	if (n !== 2) console.log("ERROR: published EventC appears wrong 2!=="+n);
+	if (cntEventC !== 4) console.log("ERROR: published EventC appears to run wrong.  4!=="+cntEventB);
+	cntEventC = 0;
+	n = pb.publish("EventC", {n:2, veto1:false, veto2:true, veto3:false});
+	if (n !== 2) console.log("ERROR: published EventC appears wrong 2!=="+n);
+	if (cntEventC !== 4) console.log("ERROR: published EventC appears to run wrong.  4!=="+cntEventB);
+	cntEventC = 0;
+	n = pb.publish("EventC", {n:2, veto1:false, veto2:false, veto3:true});
+	if (n !== -1) console.log("ERROR: published EventC appears wrong -1!=="+n);
+	if (cntEventC !== 0) console.log("ERROR: published EventC appears to run wrong.  0!=="+cntEventB);
+
+	pb.removeVetoCheck(han10);
+	cntEventC = 0;
+	n = pb.publish("EventC", {n:2, veto1:true, veto2:false, veto3:false});
+	if (n !== 2) console.log("ERROR: published EventC appears wrong 2!=="+n);
+	if (cntEventC !== 4) console.log("ERROR: published EventC appears to run wrong.  4!=="+cntEventB);
+	cntEventC = 0;
+	n = pb.publish("EventC", {n:2, veto1:false, veto2:true, veto3:false});
+	if (n !== 2) console.log("ERROR: published EventC appears wrong 2!=="+n);
+	if (cntEventC !== 4) console.log("ERROR: published EventC appears to run wrong.  4!=="+cntEventB);
+	cntEventC = 0;
+	n = pb.publish("EventC", {n:2, veto1:false, veto2:false, veto3:true});
+	if (n !== 2) console.log("ERROR: published EventC appears wrong 2!=="+n);
+	if (cntEventC !== 4) console.log("ERROR: published EventC appears to run wrong.  4!=="+cntEventB);
+
+	pb.unsubscribe(han5);
+	pb.unsubscribe(han1);
+	pb.unsubscribe(han2);
+	pb.unsubscribe(han4);
+	pb.unsubscribe(han3);
+	pb.unsubscribe(han6);
+	pb.unsubscribe(han7);
+	pb.unsubscribe(han11);
+	pb.unsubscribe(han12);
+	
+	pb.removeVetoCheck(han7);
+
+	pb.removeEmptyEvents();
+
+	pb.debugDump();
+	
+</script>
+</body>
+</html>

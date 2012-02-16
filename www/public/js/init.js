@@ -4,13 +4,13 @@ setTimeout(function() {
 	// get THE PubSub object
 	var pb = UT.PubSub.getInstance();
 
-	// Connect to the server
-	var socket = io.connect('http://localhost:8765');
+	// Connect to the node.js UT.PubSub server ("UT")
+	var socket = io.connect('http://localhost:8765/UT');
 	socket.on('news', function (data) {
 		console.log(data);
 		socket.emit('my other event', { my: 'data' });
 	});
-	
+	socket.emit('event', { my: 'data' });
 	
 	var contentLines = 1;
 	var content = document.getElementById("content");
