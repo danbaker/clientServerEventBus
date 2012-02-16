@@ -4,13 +4,22 @@ setTimeout(function() {
 	// get THE PubSub object
 	var pb = UT.PubSub.getInstance();
 
+// @TODO: Move the following chunk of code into a nice neat PubSubSocket package
+// @TODO: Write the Server-Side PubSub package
+
 	// Connect to the node.js UT.PubSub server ("UT")
 	var socket = io.connect('http://localhost:8765/UT');
-	socket.on('news', function (data) {
+	socket.on('subscribe', function (data) {
+		console.log("SERVER SUBSCRIBE REQUEST TO: (tell PubSub to send it to server)");
 		console.log(data);
-		socket.emit('my other event', { my: 'data' });
+		pb.subscribeSlow(data.eventID);
 	});
-	socket.emit('event', { my: 'data' });
+//	socket.emit('event', { my: 'data' });
+	// setup PubSub for sending published events to server
+	pb.setSlowDelegate(function(options, eventID, args) {
+		console.log("Client PubSub slow delegate.  eventID="+eventID);
+		socket.emit('publish', { id:eventID, args:args });
+	});
 	
 	var contentLines = 1;
 	var content = document.getElementById("content");

@@ -86,11 +86,19 @@ UT.Socket.prototype.listen = function(io, app, ns) {
  * @param {*} socket  The socket that just connected
  */
 UT.Socket.prototype.doConnect = function(socket) {
+	var self = this;
 	if (socket && socket.id && !this.allConnections[socket.id]) {
 		// NEW client just connected.  Remember this client info.
 		this.allConnections[socket.id] = {};
 		this.nConnections++;
+		socket.on("publish", function(data) {
+			// Client publishing a subscribed-to-event to this server
+			self.log("Client Published event:");
+			self.log(data);
+		});
 		this.log("New UT Connection.  client id="+socket.id+"  total connections="+this.nConnections);
+		this.log("Subscribing to cmd.btn.1 on this new client");
+		socket.emit("subscribe", { eventID: "cmd.btn.1" });
 	} else {
 		this.log("ERROR: Same client connection ID used twice");
 	}
