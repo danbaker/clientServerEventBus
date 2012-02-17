@@ -1,6 +1,11 @@
 // UT.PubSub
 // Can create multiple PubSub objects
 // Can use the static default PubSub object (UT.PubSub.main)
+var onNodeServer = false;
+var exports;
+if (exports) {
+	onNodeServer = true;
+}
 
 var UT = UT || {};
 
@@ -504,4 +509,12 @@ UT.PubSub.prototype.debugDump = function() {
 UT.PubSub.prototype.log = function(msg) {
 	console.log(msg);
 };
+
+
+// ------------------------
+// EXPORTING ON NODE SERVER
+if (onNodeServer) {
+exports.create = UT.PubSub.create;
+exports.getInstance = UT.PubSub.getInstance;
+}
 

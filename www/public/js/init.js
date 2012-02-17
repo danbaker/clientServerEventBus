@@ -4,6 +4,8 @@ setTimeout(function() {
 	// get THE PubSub object
 	var pb = UT.PubSub.getInstance();
 
+
+// -----------------------------
 // @TODO: Move the following chunk of code into a nice neat PubSubSocket package
 // @TODO: Write the Server-Side PubSub package
 
@@ -20,6 +22,8 @@ setTimeout(function() {
 		console.log("Client PubSub slow delegate.  eventID="+eventID);
 		socket.emit('publish', { id:eventID, args:args });
 	});
+// -----------------------------
+
 	
 	var contentLines = 1;
 	var content = document.getElementById("content");
@@ -50,7 +54,7 @@ setTimeout(function() {
 	
 	var btn1 = document.getElementById("btn1")
 	btn1.onclick = function() {
-		pb.publish("cmd.btn.1");
+		pb.publish("cmd.btn.1", {btn1:true});
 	};
 	var btn2 = document.getElementById("btn2")
 	btn2.onclick = function() {
@@ -65,3 +69,7 @@ Create EVENTS
 client subscribe to "btn1Pushed" event ... output message
 btn1.onclick publish "btn1Pushed" event
 */
+
+var exports;
+if (exports) console.log("ON SERVER");
+else console.log("ON CLIENT");

@@ -39,8 +39,11 @@ UT.Socket.prototype.init = function() {
 	// total current connections
 	this.nConnections = 0;
 	
-	// the "socket io namespace" to use
-	this.ns = "UT";
+	
+	this.io = null;			// io manager
+	this.pb = null;			// PubSub manager
+	this.app = null;		// app
+	this.ns = "UT";			// the "socket io namespace" to use
 };
 
 /**
@@ -48,13 +51,17 @@ UT.Socket.prototype.init = function() {
  * Note: start up the Socket handler
  * Note: you MUST call this before calling "app.listen(PORT)"
  * @param {*=} io  (optional) The SocketIO variable returned from "io.listen(app)"
+ * @param {*=} io  (optional) The PubSub instance to work with
  * @param {*=} app  (optional) The application that will be listening (if not passed in, assumed to already be listening)
  * @param {string=} ns  (optional) namespace to use (defaults to "UT")
  */
-UT.Socket.prototype.listen = function(io, app, ns) {
+UT.Socket.prototype.listen = function(io, pb, app, ns) {
 	var self = this;
 	if (io) {
 		this.io = io;
+	}
+	if (pb) {
+		this.pb = pb;
 	}
 	if (app) {
 		this.io.listen(app);
@@ -69,10 +76,10 @@ UT.Socket.prototype.listen = function(io, app, ns) {
 		socket.on('disconnect', function () {
 			self.doDisconnect(socket);
 		});
-		socket.on('event', function (data) {
-			self.log("UT.EVENT:");
-			self.log(data);
-		});
+//		socket.on('event', function (data) {
+//			self.log("Socket.listen got 'event'");
+//			self.doEvent(data);
+//		});
 		// QUESTION: How do we add listen events here, later ?
 //		socket.on('my other event', function (data) {
 //			this.log(data);
@@ -80,6 +87,22 @@ UT.Socket.prototype.listen = function(io, app, ns) {
 	});
 };
 
+/**
+ * an event was just published to this server from a client
+ * @param {*} data  The event data object
+ */
+UT.Socket.prototype.doPublishedEvent = function(data, socket) {
+	var eventID = data.id;					// eventID ("cmd.file.open")
+	var args = data.args || {};				// event arguments
+	this.log("UT.EVENT:  id="+eventID);
+	this.log(data);
+	if (this.pb) {
+		// include the client-socket with the args (so all local subscribers can talk back to the client)
+		args.socket = socket;
+		// pass this client-side published event along to every subscriber on this server
+		this.pb.publish(eventID, args);
+	}
+}
 
 /**
  * a new client just connected
@@ -93,8 +116,7 @@ UT.Socket.prototype.doConnect = function(socket) {
 		this.nConnections++;
 		socket.on("publish", function(data) {
 			// Client publishing a subscribed-to-event to this server
-			self.log("Client Published event:");
-			self.log(data);
+			self.doPublishedEvent(data, socket);
 		});
 		this.log("New UT Connection.  client id="+socket.id+"  total connections="+this.nConnections);
 		this.log("Subscribing to cmd.btn.1 on this new client");
@@ -123,6 +145,10 @@ UT.Socket.prototype.doDisconnect = function(socket) {
 UT.Socket.prototype.log = function(msg) {
 	console.log(msg);
 };
+
+var exports;
+if (exports) console.log("ON SERVER");
+else console.log("ON CLIENT");
 
 // EXPORTING
 exports.create = UT.Socket.create;
