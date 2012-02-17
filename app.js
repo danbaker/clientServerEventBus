@@ -50,7 +50,6 @@ pb.subscribe("cmd.btn.1", function(eventID, data) {
 	// @TODO: process this event.
 
 });
-pb.publish("EventA");
 
 
 var utsock = utsocket.getInstance();
@@ -59,12 +58,15 @@ utsock.listen(io, pb);
 app.listen(8765);
 console.log("Express server listening on port %d in %s mode", app.address().port, app.settings.env);
 
+
+
+// Note: we may NOT need this...
+/*
 // // // // // // // // // // // // // // // // //
 //
 //	 	Handle General Socket.IO
 //
-// Note: we may NOT need this...
-/*
+
 var allConnections = {};
 var nConnections = 0;
 
