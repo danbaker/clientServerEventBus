@@ -39,6 +39,8 @@ UT.Socket.prototype.init = function() {
 	// total current connections
 	this.nConnections = 0;
 	
+	// map from eventID to array of client-side sockets that have subscribed to an eventID
+	this.subscriptions = {};
 	
 	this.io = null;			// io manager
 	this.pb = null;			// PubSub manager
@@ -78,10 +80,34 @@ UT.Socket.prototype.listen = function(io, pb, app, ns) {
 		});
 	});
 	pb.setSlowDelegate(function(options, eventID, args) {
-		console.log("Server PubSub slow delegate:  eventID="+eventID);
-		console.log("@TODO: publish this event to EACH socket that subscribed to this event");
-//		socket.emit('publish', { id:eventID, args:args });
+		//console.log("Server PubSub slow delegate:  eventID="+eventID);
+		self.doSlowDelegatePublish(eventID, args);
 	});
+};
+
+/**
+ * an event was just published ON this server, and is ready to be re-published to clients
+ * @param {string} eventID  The eventID to re-published to the clients that subscribed to it
+ * @param {*} args  The arguments to publish with the eventID
+ */
+UT.Socket.prototype.doSlowDelegatePublish = function(eventID, args) {
+console.log("SlowDelegatePublish: eventID="+eventID);
+	var arr;
+	var idx;
+	var max;
+	var socket;
+	if (this.subscriptions && this.subscriptions[eventID]) {
+		arr = this.subscriptions[eventID];
+		// at least one client subscribed to this eventID
+		max = arr.length;
+		for(idx = 0; idx<max; idx++) {
+			socket = arr[idx];
+			if (socket) {
+				// send this event to this one client that subscribed to it
+				socket.emit('publish', { eventID:eventID, args:args } );
+			}
+		}
+	}
 };
 
 /**
@@ -90,17 +116,36 @@ UT.Socket.prototype.listen = function(io, pb, app, ns) {
  * @param (*) socket  The socket to the client that published the event
  */
 UT.Socket.prototype.doPublishedEvent = function(data, socket) {
-	var eventID = data.id;					// eventID ("cmd.file.open")
+	var eventID = data.eventID;					// eventID ("cmd.file.open")
 	var args = data.args || {};				// event arguments
-	this.log("UT.EVENT:  id="+eventID);
-	this.log(data);
+	this.log("FromClient: publish eventID="+data.id);
 	if (this.pb) {
 		// include the client-socket with the args (so all local subscribers can talk back to the client)
 		args.socket = socket;
 		// pass this client-side published event along to every subscriber on this server
 		this.pb.publish(eventID, args);
 	}
-}
+};
+
+/**
+ * A single client (socket.id) just requested to subscribe to a server-event (data.eventID)
+ * @param {*} data  The event data object to subscribe to  { eventID:'cmd.btn.1' }
+ * @param (*) socket  The socket to the client that is subscribing
+ */
+UT.Socket.prototype.doSubscribeToEvent = function(data, socket) {
+	//console.log("A single client is subscribing to a server-event: client="+socket.id+" event="+data.eventID);
+	// remember the eventID and which client subscribed to it
+	var eventID = data.eventID;
+	this.log("FromClient: subscribe eventID="+data.eventID+"   from socketID="+socket.it);
+	if (!this.subscriptions[eventID]) {
+		// first client to subscribe to this event
+		this.subscriptions[eventID] = [];
+	}
+	this.subscriptions[eventID].push(socket);
+
+	// make sure this server-PubSub will publish this event to the clients over the slow-connection
+	this.pb.subscribeSlow(eventID);
+};
 
 /**
  * a new client just connected
@@ -117,18 +162,13 @@ UT.Socket.prototype.doConnect = function(socket) {
 			self.doPublishedEvent(data, socket);
 		});
 		socket.on('subscribe', function (data) {
-			console.log("A single client is subscribing to a server-event: client="+socket.id+" event="+data.eventID);
-			console.log("@TODO: track client-id with the eventID");
-			console.log(data);
-			// make sure that this event will call the "slow function" when published
-			// @TODO: make the "slow function" walk the list of client-id's subscribed to this eventID
-			pb.subscribeSlow(data.eventID);
+			// Client (socket.id) is subscribing to a server-side event (data.eventID)
+			self.doSubscribeToEvent(data, socket);
 		});
 
 		this.log("New UT Connection.  client id="+socket.id+"  total connections="+this.nConnections);
-
-		this.log("TEMP: Subscribing to cmd.btn.1 on this new client");
-		socket.emit("subscribe", { eventID: "cmd.btn.1" });
+		// allow anyone to handle this new client connection
+		this.pb.publish('onConnect', { socket: socket } );
 	} else {
 		this.log("ERROR: Same client connection ID used twice");
 	}
@@ -141,9 +181,11 @@ UT.Socket.prototype.doConnect = function(socket) {
  */
 UT.Socket.prototype.doDisconnect = function(socket) {
 	if (socket && socket.id) {
+		this.log("UT Disconnection.  client id="+socket.id+"  total connections="+this.nConnections);
 		delete this.allConnections[socket.id];
 		this.nConnections--;
-		this.log("UT Disconnection.  client id="+socket.id+"  total connections="+this.nConnections);
+		// @TODO: walk all this.subscriptions and remove this socket from everywhere!
+		this.pb.publish('onDisconnect', { socket: socket } );
 	} else {
 		this.log("ERROR: unknown client disconnected");
 	}

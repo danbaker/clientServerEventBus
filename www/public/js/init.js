@@ -5,6 +5,7 @@ setTimeout(function() {
 	var pb = UT.PubSub.getInstance();
 
 
+
 // -----------------------------
 // @TODO: Move the following chunk of code into a nice neat PubSubSocket package
 // @TODO: Write the Server-Side PubSub package
@@ -12,16 +13,22 @@ setTimeout(function() {
 	// Connect to the node.js UT.PubSub server ("UT")
 	var socket = io.connect('http://localhost:8765/UT');
 	socket.on('subscribe', function (data) {
-		console.log("SERVER SUBSCRIBE REQUEST TO: (tell PubSub to send it to server)");
+		console.log("SERVER SUBSCRIBE-REQUEST for eventID="+data.eventID+"  (about to tell local PubSub to send this event to server when it is published locally)");
 		console.log(data);
 		pb.subscribeSlow(data.eventID);
+	});
+	socket.on('publish', function (data) {
+		console.log("SERVER PUBLISH-REQUEST for eventID="+data.eventID+"  (server just published this event, and published it here too)");
+		console.log(data);
+		pb.publish(data.eventID, data.args);
 	});
 //	socket.emit('event', { my: 'data' });
 	// setup PubSub for sending published events to server
 	pb.setSlowDelegate(function(options, eventID, args) {
 		console.log("Client PubSub slow delegate.  eventID="+eventID);
-		socket.emit('publish', { id:eventID, args:args });
+		socket.emit('publish', { eventID:eventID, args:args });
 	});
+	socket.emit('subscribe', { eventID:'cmd.btn.2' } );
 // -----------------------------
 
 	

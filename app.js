@@ -44,12 +44,6 @@ app.get('/', function(req, res){
 // Final Setup
 
 var pb = pubsub.getInstance();
-pb.subscribe("cmd.btn.1", function(eventID, data) {
-	console.log("Just got event: "+eventID);
-	if (data.socket) console.log(".. came from a client.  Got socket to reply to that one client.");
-	// @TODO: process this event.
-
-});
 
 
 var utsock = utsocket.getInstance();
@@ -60,46 +54,29 @@ console.log("Express server listening on port %d in %s mode", app.address().port
 
 
 
-// Note: we may NOT need this...
-/*
-// // // // // // // // // // // // // // // // //
-//
-//	 	Handle General Socket.IO
-//
-
-var allConnections = {};
-var nConnections = 0;
-
-// new client just connected
-var doConnect = function(socket) {
-	if (socket && socket.id && !allConnections[socket.id]) {
-		allConnections[socket.id] = {};
-		nConnections++;
-		console.log("New Connection.  client id="+socket.id+"  total connections="+nConnections);
+// TESTING CODE BELOW ...
+pb.subscribe('onConnect', function(eventID, args) {
+	// a new client just connected to this server ...
+	if (args && args.socket) {
+		console.log("New client connected.  socketID="+args.socket.id);
+		args.socket.emit("subscribe", { eventID: "cmd.btn.1" });
 	} else {
-		console.log("ERROR: Same client connection ID used twice");
+		console.log("WARNING: Got a onConnect event without a socket");
 	}
-};
-//existing client just disconnected
-var doDisconnect = function(socket) {
-	if (socket && socket.id) {
-		delete allConnections[socket.id];
-		nConnections--;
-		console.log("Disconnection.  client id="+socket.id+"  total connections="+nConnections);
-	} else {
-		console.log("ERROR: unknown client disconnected");
-	}
-};
-
-io.sockets.on('connection', function (socket) {
-	doConnect(socket);
-	socket.emit('news', { hello: 'world' });
-
-	socket.on('my other event', function (data) {
-		console.log(data);
-	});
-	socket.on('disconnect', function () {
-		doDisconnect(socket);
-	});
 });
-*/
+pb.subscribe('onDisconnect', function(eventID, args) {
+	// an old client just disconnected
+	console.log("Old client Dis-connected.  socketID="+args.socket.id);
+});
+pb.subscribe("cmd.btn.1", function(eventID, data) {
+	console.log("Just got event: "+eventID);
+	if (data && data.socket) console.log(".. came from a client.  Got socket to reply to that one client.");
+	// @TODO: process this event.
+	console.log("Publishing cmd.btn.2 ...");
+	pb.publish("cmd.btn.2");
+
+});
+pb.subscribe("cmd.btn.2", function(eventID, data) {
+	console.log("Just got event: "+eventID);
+	if (data && data.socket) console.log(".. came from a client.  Got socket to reply to that one client.");
+});
