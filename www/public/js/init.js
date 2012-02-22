@@ -12,23 +12,27 @@ setTimeout(function() {
 
 	// Connect to the node.js UT.PubSub server ("UT")
 	var socket = io.connect('http://localhost:8765/UT');
-	socket.on('subscribe', function (data) {
+	console.log(socket);
+	socket.on('PubSubConnect', function (data) {
+		console.log("SERVER INFORMED ME I AM NOW CONNECTED");
+		socket.emit('PubSubSubscribe', { eventID:'cmd.btn.2' } );
+	});
+	socket.on('PubSubSubscribe', function (data) {
+		console.log(socket);
 		console.log("SERVER SUBSCRIBE-REQUEST for eventID="+data.eventID+"  (about to tell local PubSub to send this event to server when it is published locally)");
 		console.log(data);
 		pb.subscribeSlow(data.eventID);
 	});
-	socket.on('publish', function (data) {
+	socket.on('PubSubPublish', function (data) {
 		console.log("SERVER PUBLISH-REQUEST for eventID="+data.eventID+"  (server just published this event, and published it here too)");
 		console.log(data);
 		pb.publish(data.eventID, data.args);
 	});
-//	socket.emit('event', { my: 'data' });
 	// setup PubSub for sending published events to server
 	pb.setSlowDelegate(function(options, eventID, args) {
 		console.log("Client PubSub slow delegate.  eventID="+eventID);
-		socket.emit('publish', { eventID:eventID, args:args });
+		socket.emit('PubSubPublish', { eventID:eventID, args:args });
 	});
-	socket.emit('subscribe', { eventID:'cmd.btn.2' } );
 // -----------------------------
 
 	

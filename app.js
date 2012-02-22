@@ -59,7 +59,7 @@ pb.subscribe('onConnect', function(eventID, args) {
 	// a new client just connected to this server ...
 	if (args && args.socket) {
 		console.log("New client connected.  socketID="+args.socket.id);
-		args.socket.emit("subscribe", { eventID: "cmd.btn.1" });
+		args.socket.emit("PubSubSubscribe", { eventID: "cmd.btn.1" });
 	} else {
 		console.log("WARNING: Got a onConnect event without a socket");
 	}

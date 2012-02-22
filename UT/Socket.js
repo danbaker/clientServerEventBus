@@ -104,7 +104,7 @@ console.log("SlowDelegatePublish: eventID="+eventID);
 			socket = arr[idx];
 			if (socket) {
 				// send this event to this one client that subscribed to it
-				socket.emit('publish', { eventID:eventID, args:args } );
+				socket.emit('PubSubPublish', { eventID:eventID, args:args } );
 			}
 		}
 	}
@@ -118,7 +118,7 @@ console.log("SlowDelegatePublish: eventID="+eventID);
 UT.Socket.prototype.doPublishedEvent = function(data, socket) {
 	var eventID = data.eventID;					// eventID ("cmd.file.open")
 	var args = data.args || {};				// event arguments
-	this.log("FromClient: publish eventID="+data.id);
+	this.log("FromClient: publish eventID="+data.eventID);
 	if (this.pb) {
 		// include the client-socket with the args (so all local subscribers can talk back to the client)
 		args.socket = socket;
@@ -136,7 +136,7 @@ UT.Socket.prototype.doSubscribeToEvent = function(data, socket) {
 	//console.log("A single client is subscribing to a server-event: client="+socket.id+" event="+data.eventID);
 	// remember the eventID and which client subscribed to it
 	var eventID = data.eventID;
-	this.log("FromClient: subscribe eventID="+data.eventID+"   from socketID="+socket.it);
+	this.log("FromClient: subscribe eventID="+data.eventID+"   from socketID="+socket.id);
 	if (!this.subscriptions[eventID]) {
 		// first client to subscribe to this event
 		this.subscriptions[eventID] = [];
@@ -157,11 +157,11 @@ UT.Socket.prototype.doConnect = function(socket) {
 		// NEW client just connected.  Remember this client info.
 		this.allConnections[socket.id] = {};
 		this.nConnections++;
-		socket.on("publish", function(data) {
+		socket.on("PubSubPublish", function(data) {
 			// Client publishing a subscribed-to-event to this server
 			self.doPublishedEvent(data, socket);
 		});
-		socket.on('subscribe', function (data) {
+		socket.on('PubSubSubscribe', function (data) {
 			// Client (socket.id) is subscribing to a server-side event (data.eventID)
 			self.doSubscribeToEvent(data, socket);
 		});
@@ -169,6 +169,9 @@ UT.Socket.prototype.doConnect = function(socket) {
 		this.log("New UT Connection.  client id="+socket.id+"  total connections="+this.nConnections);
 		// allow anyone to handle this new client connection
 		this.pb.publish('onConnect', { socket: socket } );
+		// inform the client they have successfully connected (Note: also happens on auto-reconnect)
+		this.log("... sending 'connect' to client socket id="+socket.id);
+		socket.emit("PubSubConnect");
 	} else {
 		this.log("ERROR: Same client connection ID used twice");
 	}
@@ -182,7 +185,7 @@ UT.Socket.prototype.doConnect = function(socket) {
 UT.Socket.prototype.doDisconnect = function(socket) {
 	if (socket && socket.id) {
 		this.log("UT Disconnection.  client id="+socket.id+"  total connections="+this.nConnections);
-		delete this.allConnections[socket.id];
+		delete this.allConnections[socket.s];
 		this.nConnections--;
 		// @TODO: walk all this.subscriptions and remove this socket from everywhere!
 		this.pb.publish('onDisconnect', { socket: socket } );
