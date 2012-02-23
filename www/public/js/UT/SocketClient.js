@@ -74,19 +74,24 @@ UT.SocketClient.prototype.setup = function(pb, socket) {
 	});
 };
 
+/**
+ * allow this client to subscribe to events that will be published on the server AND on this local client
+ * @param {string} eventID  The id of the event to subscribe to on the server
+ * @param {Function=} fnc  The function to call when the eventID is published (from locally or server)
+ * @param {Object=} obj  The object that the function is a part of (the "this" ptr for the function)
+ * @param {boolean=} serverOnly  true means to NOT subscribe locally (usually, because it was already done)
+ * @return {*}  Handle to your subscribed-to event
+ */
+UT.SocketClient.prototype.subscribe = function(eventID, fnc, obj, serverOnly) {
+	this._socket.emit('PubSubSubscribe', { eventID:eventID });
+	if (fnc && !serverOnly) {
+		return this._pb.subscribe(eventID, fnc, obj);
+	}
+	return null;
+};
+
+
 UT.SocketClient.prototype.log = function(msg) {
 	//console.log(msg);
 };
 
-/**
- * allow this client to subscribe to events that will be published on the server
- * @param {string} eventID  The id of the event to subscribe to on the server
- */
-UT.SocketClient.prototype.subscribe = function(eventID) {
-	this._socket.emit('PubSubSubscribe', { eventID:eventID });
-};
-
-		
-		
-		
-		

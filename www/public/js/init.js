@@ -1,5 +1,14 @@
 // THE first JavaScript loaded
 
+/*  TO DO
+
+--Create EVENTS
+--Have server send the current state of the 5 checkboxes to the client onConnect
+
+
+*/
+
+
 setTimeout(function() {
 	// get THE PubSub object
 	var pb = UT.PubSub.getInstance();
@@ -7,16 +16,33 @@ setTimeout(function() {
 	var socket = io.connect('http://localhost:8765/UT');
 	var socketClient = UT.SocketClient.getInstance();
 	socketClient.setup(pb, socket);
+	var secondTime = false;
 
 	// setup this client for events from server
 	pb.subscribe('PubSubConnect', function(data) {
-		console.log("SERVER INFORMED ME I AM NOW CONNECTED");
-		// subscribe to events that happen on the server
-		socketClient.subscribe('cmd.btn.1');
-		socketClient.subscribe('cmd.btn.2');
-		socketClient.subscribe('cmd.btn.3');
-		socketClient.subscribe('cmd.btn.4');
-		socketClient.subscribe('cmd.btn.5');
+		console.log("SERVER INFORMED ME I AM NOW CONNECTED.  secondTime="+secondTime);
+		// subscribe to events that happen on the server AND locally
+		socketClient.subscribe("cmd.btn.1", function(args) {
+			addMessage("Button 1 event");
+			pb.publish("cmd.btn", {btn:1});
+		}, undefined, secondTime);
+		socketClient.subscribe("cmd.btn.2", function(args) {
+			addMessage("Button 2 event");
+			pb.publish("cmd.btn", {btn:2});
+		}, undefined, secondTime);
+		socketClient.subscribe("cmd.btn.3", function(args) {
+			addMessage("Button 3 event");
+			pb.publish("cmd.btn", {btn:3});
+		}, undefined, secondTime);
+		socketClient.subscribe("cmd.btn.4", function(args) {
+			addMessage("Button 4 event");
+			pb.publish("cmd.btn", {btn:4});
+		}, undefined, secondTime);
+		socketClient.subscribe("cmd.btn.5", function(args) {
+			addMessage("Button 5 event");
+			pb.publish("cmd.btn", {btn:5});
+		}, undefined, secondTime);
+		secondTime = true;
 	});
 	
 	var contentLines = 1;
@@ -38,27 +64,6 @@ setTimeout(function() {
 		contentN++;
 		content.innerHTML = txt;
 	};
-	
-	pb.subscribe("cmd.btn.1", function(args) {
-		addMessage("Button 1 event");
-		pb.publish("cmd.btn", {btn:1});
-	});
-	pb.subscribe("cmd.btn.2", function(args) {
-		addMessage("Button 2 event");
-		pb.publish("cmd.btn", {btn:2});
-	});
-	pb.subscribe("cmd.btn.3", function(args) {
-		addMessage("Button 3 event");
-		pb.publish("cmd.btn", {btn:3});
-	});
-	pb.subscribe("cmd.btn.4", function(args) {
-		addMessage("Button 4 event");
-		pb.publish("cmd.btn", {btn:4});
-	});
-	pb.subscribe("cmd.btn.5", function(args) {
-		addMessage("Button 5 event");
-		pb.publish("cmd.btn", {btn:5});
-	});
 	
 	var btn1 = document.getElementById("btn1");
 	btn1.onclick = function() {
@@ -101,14 +106,6 @@ setTimeout(function() {
 		pb.publish("cmd.chk", {chk:5, checked:chk5.checked});
 	};
 }, 500);
-
-/*  TO DO
-
-Create EVENTS
-
-client subscribe to "btn1Pushed" event ... output message
-btn1.onclick publish "btn1Pushed" event
-*/
 
 var exports;
 if (exports) console.log("ON SERVER");

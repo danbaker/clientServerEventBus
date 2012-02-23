@@ -72,6 +72,7 @@ UT.PubSub.prototype.setSlowDelegate = function(fn, obj) {
  * @return {*}  Handle to your subscribed-to event
  */
 UT.PubSub.prototype.subscribe = function(eventID, fn, obj, priority) {
+	this.log("subscribe to "+eventID);
 	var returnHandle;
 	var evt;
 	var evtData;
