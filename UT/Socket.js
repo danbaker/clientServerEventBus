@@ -91,7 +91,7 @@ UT.Socket.prototype.listen = function(io, pb, app, ns) {
  * @param {*} args  The arguments to publish with the eventID
  */
 UT.Socket.prototype.doSlowDelegatePublish = function(eventID, args) {
-console.log("SlowDelegatePublish: eventID="+eventID);
+	//console.log("SlowDelegatePublish: eventID="+eventID);
 	var arr;
 	var idx;
 	var max;
@@ -196,7 +196,7 @@ UT.Socket.prototype.doDisconnect = function(socket) {
 
 
 UT.Socket.prototype.log = function(msg) {
-	console.log(msg);
+	//console.log(msg);
 };
 
 var exports;

@@ -44,8 +44,6 @@ app.get('/', function(req, res){
 // Final Setup
 
 var pb = pubsub.getInstance();
-
-
 var utsock = utsocket.getInstance();
 utsock.listen(io, pb);
 
