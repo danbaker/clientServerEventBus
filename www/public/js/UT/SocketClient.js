@@ -40,15 +40,18 @@ UT.SocketClient.prototype.init = function() {
  * @param {*} socket Socket.IO instance already connected to the server  (io.connect('http://localhost:8765/UT');)
  */
 UT.SocketClient.prototype.setup = function(pb, socket) {
+	var self = this;
 	this._pb = pb;
 	this._socket = socket;
 	// setup the socket.io socket for known PubSub events
 	socket.on('PubSubConnect', function (data) {
+		self.log("PubSubConnect");
 		// server just informed this client that it is now connected to the server
 		// re-publish this event to the entire client
 		pb.publish('PubSubConnect', data);
 	});
 	socket.on('PubSubSubscribe', function (data) {
+		self.log("PubSubSubscribe: eventID="+data.eventID);
 		// server just requested to subscribe to an event on this client
 		//	meaning: when the event is published on this client, send it to the server to be re-published
 		//console.log("SERVER SUBSCRIBE-REQUEST for eventID="+data.eventID+"  (about to tell local PubSub to send this event to server when it is published locally)");
@@ -56,6 +59,7 @@ UT.SocketClient.prototype.setup = function(pb, socket) {
 		pb.subscribeSlow(data.eventID);
 	});
 	socket.on('PubSubPublish', function (data) {
+		self.log("PubSubPublish: eventID="+data.eventID);
 		// server just requested to re-publish an event on this client
 		//console.log("SERVER PUBLISH-REQUEST for eventID="+data.eventID+"  (server just published this event, and published it here too)");
 		//console.log(data);
@@ -63,12 +67,16 @@ UT.SocketClient.prototype.setup = function(pb, socket) {
 	});
 	// setup PubSub for sending published events to server
 	pb.setSlowDelegate(function(options, eventID, args) {
+		self.log("slowDelegate: eventID="+eventID);
 		// this client just published an event that had previously been subscribed to from the server
 		//console.log("Client PubSub slow delegate.  eventID="+eventID);
 		socket.emit('PubSubPublish', { eventID:eventID, args:args });
 	});
 };
 
+UT.SocketClient.prototype.log = function(msg) {
+	//console.log(msg);
+};
 
 /**
  * allow this client to subscribe to events that will be published on the server

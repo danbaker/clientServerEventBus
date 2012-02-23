@@ -12,7 +12,11 @@ setTimeout(function() {
 	pb.subscribe('PubSubConnect', function(data) {
 		console.log("SERVER INFORMED ME I AM NOW CONNECTED");
 		// subscribe to events that happen on the server
+		socketClient.subscribe('cmd.btn.1');
 		socketClient.subscribe('cmd.btn.2');
+		socketClient.subscribe('cmd.btn.3');
+		socketClient.subscribe('cmd.btn.4');
+		socketClient.subscribe('cmd.btn.5');
 	});
 	
 	var contentLines = 1;
@@ -36,19 +40,65 @@ setTimeout(function() {
 	};
 	
 	pb.subscribe("cmd.btn.1", function(args) {
-		addMessage("Button 1 Pressed at client");
+		addMessage("Button 1 event");
+		pb.publish("cmd.btn", {btn:1});
 	});
 	pb.subscribe("cmd.btn.2", function(args) {
-		addMessage("Button 2 Pressed at client");
+		addMessage("Button 2 event");
+		pb.publish("cmd.btn", {btn:2});
+	});
+	pb.subscribe("cmd.btn.3", function(args) {
+		addMessage("Button 3 event");
+		pb.publish("cmd.btn", {btn:3});
+	});
+	pb.subscribe("cmd.btn.4", function(args) {
+		addMessage("Button 4 event");
+		pb.publish("cmd.btn", {btn:4});
+	});
+	pb.subscribe("cmd.btn.5", function(args) {
+		addMessage("Button 5 event");
+		pb.publish("cmd.btn", {btn:5});
 	});
 	
-	var btn1 = document.getElementById("btn1")
+	var btn1 = document.getElementById("btn1");
 	btn1.onclick = function() {
-		pb.publish("cmd.btn.1", {btn1:true});
+		pb.publish("cmd.btn.1");
 	};
-	var btn2 = document.getElementById("btn2")
+	var btn2 = document.getElementById("btn2");
 	btn2.onclick = function() {
 		pb.publish("cmd.btn.2");
+	};
+	var btn3 = document.getElementById("btn3");
+	btn3.onclick = function() {
+		pb.publish("cmd.btn.3");
+	};
+	var btn4 = document.getElementById("btn4");
+	btn4.onclick = function() {
+		pb.publish("cmd.btn.4");
+	};
+	var btn5 = document.getElementById("btn5");
+	btn5.onclick = function() {
+		pb.publish("cmd.btn.5");
+	};
+	var chk1 = document.getElementById("chk1");
+	chk1.onclick = function() {
+		pb.publish("cmd.chk", {chk:1, checked:chk1.checked});
+	};
+	var chk2 = document.getElementById("chk2");
+	chk2.onclick = function() {
+		pb.publish("cmd.chk", {chk:2, checked:chk2.checked});
+	};
+	var chk3 = document.getElementById("chk3");
+	chk3.onclick = function() {
+		pb.publish("cmd.chk", {chk:3, checked:chk3.checked});
+	};
+	var chk4 = document.getElementById("chk4");
+	chk4.onclick = function() {
+		pb.publish("cmd.chk", {chk:4, checked:chk4.checked});
+	};
+	var chk5 = document.getElementById("chk5")
+	chk5.onclick = function() {
+		pb.publish("cmd.chk", {chk:5, checked:chk5.checked});
 	};
 }, 500);
 

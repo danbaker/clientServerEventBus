@@ -53,11 +53,13 @@ console.log("Express server listening on port %d in %s mode", app.address().port
 
 
 // TESTING CODE BELOW ...
+var chks = [];
 pb.subscribe('onConnect', function(eventID, args) {
 	// a new client just connected to this server ...
 	if (args && args.socket) {
 		console.log("New client connected.  socketID="+args.socket.id);
-		args.socket.emit("PubSubSubscribe", { eventID: "cmd.btn.1" });
+		args.socket.emit("PubSubSubscribe", { eventID: "cmd.btn" });
+		args.socket.emit("PubSubSubscribe", { eventID: "cmd.chk" });
 	} else {
 		console.log("WARNING: Got a onConnect event without a socket");
 	}
@@ -66,15 +68,16 @@ pb.subscribe('onDisconnect', function(eventID, args) {
 	// an old client just disconnected
 	console.log("Old client Dis-connected.  socketID="+args.socket.id);
 });
-pb.subscribe("cmd.btn.1", function(eventID, data) {
-	console.log("Just got event: "+eventID);
-	if (data && data.socket) console.log(".. came from a client.  Got socket to reply to that one client.");
-	// @TODO: process this event.
-	console.log("Publishing cmd.btn.2 ...");
-	pb.publish("cmd.btn.2");
-
+pb.subscribe("cmd.btn", function(eventID, data) {
+	var cmdTo = "cmd.btn."+(data.btn+1);
+	if (data.btn === 5) cmdTo = "cmd.btn.1";
+//	console.log("Just got event: "+eventID+"  button "+data.btn+"  checked="+chks[data.btn]+"  will publish:"+cmdTo);
+	if (chks[data.btn]) {
+		pb.publish(cmdTo);
+	}
 });
-pb.subscribe("cmd.btn.2", function(eventID, data) {
-	console.log("Just got event: "+eventID);
-	if (data && data.socket) console.log(".. came from a client.  Got socket to reply to that one client.");
+
+pb.subscribe("cmd.chk", function(eventID, data) {
+//	console.log("Just got checkbox event: "+eventID+"  checkbox#"+data.chk+"  checked="+data.checked);
+	chks[data.chk] = data.checked;
 });

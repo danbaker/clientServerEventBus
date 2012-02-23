@@ -224,6 +224,7 @@ UT.PubSub.prototype.unsubscribe = function(handle) {
  *					  null means "no one listening"
  */
 UT.PubSub.prototype.checkEvent = function(eventID, args) {
+this.log("checkEvent:  eventID="+eventID);
 	var evt;				// event object
 	var pri;				// collection of subscribers for a single priority
 	var priority;			// a priority value
@@ -232,6 +233,7 @@ UT.PubSub.prototype.checkEvent = function(eventID, args) {
 	var oneSub;				// one subscription object
 	// 1) find event
 	evt = this._events[eventID];
+this.log(evt);
 	if (evt && evt.subscribers && evt.subscribers.pri) {
 		// check VETO
 		if (evt.vetoers) {
@@ -262,6 +264,10 @@ UT.PubSub.prototype.checkEvent = function(eventID, args) {
 			}
 		}
 	}
+	// IF slow has subscribed, return true
+	if (evt && evt.slow) {
+		return true;
+	}
 	return null;
 };
 
@@ -273,6 +279,7 @@ UT.PubSub.prototype.checkEvent = function(eventID, args) {
  */
 UT.PubSub.prototype.publish = function(eventID, args) {
 	var n = this.checkEvent(eventID, args);
+this.log("publish: eventID="+eventID+"  check returned "+n);
 	if (n === true) {
 		return this.publishNow(eventID, args);	// n SUBSCRIBERS
 		
@@ -507,7 +514,7 @@ UT.PubSub.prototype.debugDump = function() {
 	}
 };
 UT.PubSub.prototype.log = function(msg) {
-	console.log(msg);
+	//console.log(msg);
 };
 
 
