@@ -32,6 +32,7 @@ UT.SocketClient.getInstance = function() {
 UT.SocketClient.prototype.init = function() {
 	this._pb = null;
 	this._socket = null;
+	this.setSubcribeClientServer();
 };
 
 /**
@@ -79,17 +80,29 @@ UT.SocketClient.prototype.setup = function(pb, socket) {
  * @param {string} eventID  The id of the event to subscribe to on the server
  * @param {Function=} fnc  The function to call when the eventID is published (from locally or server)
  * @param {Object=} obj  The object that the function is a part of (the "this" ptr for the function)
- * @param {boolean=} serverOnly  true means to NOT subscribe locally (usually, because it was already done)
  * @return {*}  Handle to your subscribed-to event
  */
-UT.SocketClient.prototype.subscribe = function(eventID, fnc, obj, serverOnly) {
-	this._socket.emit('PubSubSubscribe', { eventID:eventID });
-	if (fnc && !serverOnly) {
+UT.SocketClient.prototype.subscribe = function(eventID, fnc, obj) {
+	if (this._onServer) {
+		this._socket.emit('PubSubSubscribe', { eventID:eventID });
+	}
+	if (fnc && this._onClient) {
 		return this._pb.subscribe(eventID, fnc, obj);
 	}
 	return null;
 };
 
+/**
+ * describe how the "subscribe" function works with subscribing locally and on the server
+ * @param {boolean} onClient  true means to subscribe on this local client (defaults to true)
+ * @param {boolean} onServer  true means to subscribe on the server (defaults to true)
+ */
+UT.SocketClient.prototype.setSubcribeClientServer = function(onClient, onServer) {
+	if (onClient === undefined) onClient = true;
+	if (onServer === undefined) onServer = true;
+	this._onClient = onClient;
+	this._onServer = onServer;
+};
 
 UT.SocketClient.prototype.log = function(msg) {
 	//console.log(msg);

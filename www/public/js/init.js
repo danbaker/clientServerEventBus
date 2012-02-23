@@ -16,33 +16,38 @@ setTimeout(function() {
 	var socket = io.connect('http://localhost:8765/UT');
 	var socketClient = UT.SocketClient.getInstance();
 	socketClient.setup(pb, socket);
-	var secondTime = false;
+	var firstTime = true;
 
 	// setup this client for events from server
 	pb.subscribe('PubSubConnect', function(data) {
-		console.log("SERVER INFORMED ME I AM NOW CONNECTED.  secondTime="+secondTime);
+		console.log("SERVER INFORMED ME I AM NOW CONNECTED.  firstTime="+firstTime);
+		// only subscribe on client IF this is the first time connected
+		// Note: the 2nd time, we have already subscribed locally
+		socketClient.setSubcribeClientServer(firstTime, true);
 		// subscribe to events that happen on the server AND locally
 		socketClient.subscribe("cmd.btn.1", function(args) {
 			addMessage("Button 1 event");
 			pb.publish("cmd.btn", {btn:1});
-		}, undefined, secondTime);
+		});
 		socketClient.subscribe("cmd.btn.2", function(args) {
 			addMessage("Button 2 event");
 			pb.publish("cmd.btn", {btn:2});
-		}, undefined, secondTime);
+		});
 		socketClient.subscribe("cmd.btn.3", function(args) {
 			addMessage("Button 3 event");
 			pb.publish("cmd.btn", {btn:3});
-		}, undefined, secondTime);
+		});
 		socketClient.subscribe("cmd.btn.4", function(args) {
 			addMessage("Button 4 event");
 			pb.publish("cmd.btn", {btn:4});
-		}, undefined, secondTime);
+		});
 		socketClient.subscribe("cmd.btn.5", function(args) {
 			addMessage("Button 5 event");
 			pb.publish("cmd.btn", {btn:5});
-		}, undefined, secondTime);
-		secondTime = true;
+		});
+		firstTime = false;
+		// reset to default setting
+		socketClient.setSubcribeClientServer();
 	});
 	
 	var contentLines = 1;
