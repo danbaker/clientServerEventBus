@@ -42,6 +42,10 @@ UT.PubSub.prototype.init = function() {
 	// collection of handles and objects (key is handle, value is eventObj)
 	this._handles = {};			// eventHandle: { eventID:eventID, priority:N } --OR-- { eventID:eventID, veto:true }
 	
+	this._minPriAllowed = 0;			// minimum possible priority
+	this._maxPriAllowed = 9;			// maximum possible priority
+	this._defaultPri = 5;				// default priority
+    
 	// slow-connection delegate info
 	this._slowFn = null;		// function to call
 	this._slowObj = null;		// object to call function on
@@ -76,9 +80,10 @@ UT.PubSub.prototype.subscribe = function(eventID, fn, obj, priority) {
 	var returnHandle;
 	var evt;
 	var evtData;
-	if (!priority || typeof priority != 'number') priority = 5;
-	if (priority < 0) priority = 0;
-	if (priority > 9) priority = 9;
+	// crop priority within allowed limits
+	if (!priority || typeof priority != 'number') priority = this._defaultPri;
+	if (priority < this._minPriAllowed) priority = this._minPriAllowed;
+	if (priority > this._maxPriAllowed) priority = this._maxPriAllowed;
 
 	// create handle data to return
 	returnHandle = this.getNextHandle();
@@ -93,6 +98,9 @@ UT.PubSub.prototype.subscribe = function(eventID, fn, obj, priority) {
 		evt.subscribers.pri[priority] = [];
 	}
 	evt.subscribers.pri[priority].push( { fn:fn, obj:obj, handle:returnHandle } );
+	// set min/max suscribed priorities
+	if (priority < evt.subscribers.minPri) evt.subscribers.minPri = priority;
+	if (priority > evt.subscribers.maxPri) evt.subscribers.maxPri = priority;
 
 	return returnHandle;
 };
@@ -206,6 +214,7 @@ UT.PubSub.prototype.unsubscribe = function(handle) {
 				if (arr.length <= 1) {
 					// removing last subscriber of this event and priority, delete entire priority collection
 					delete evt.subscribers.pri[priority];
+					// TODO alter minPri or maxPri if can
 				} else {
 					// remove this one subscription from the array of this priority
 					arr.splice(idx, 1);
@@ -228,13 +237,14 @@ UT.PubSub.prototype.checkEvent = function(eventID, args) {
 this.log("checkEvent:  eventID="+eventID);
 	var evt;				// event object
 	var pri;				// collection of subscribers for a single priority
+	var min;
+	var max;
 	var priority;			// a priority value
 	var arr;				// array of subscribers for a single priority
 	var idx;				// index into array
 	var oneSub;				// one subscription object
 	// 1) find event
 	evt = this._events[eventID];
-this.log(evt);
 	if (evt && evt.subscribers && evt.subscribers.pri) {
 		// check VETO
 		if (evt.vetoers) {
@@ -251,10 +261,12 @@ this.log(evt);
 				}
 			}
 		}
-		pri = evt.subscribers.pri;
-		for(priority in pri) {
-			if (pri.hasOwnProperty(priority)) {
-				arr = pri[priority];
+		min = evt.subscribers.minPri;		// minimum priority to check
+		max = evt.subscribers.maxPri;		// maximum priority to check
+		pri = evt.subscribers.pri;			// array to check based-on priority
+		for(priority=min; priority<=max; priority++) {
+			arr = pri[priority];			// array of subscribers for this one priority
+			if (arr) {
 				for(idx=0; idx<arr.length; idx++) {
 					oneSub = arr[idx];
 					if (oneSub && oneSub.fn) {
@@ -302,19 +314,21 @@ UT.PubSub.prototype.publishNow = function(eventID, args) {
 	var returnN = 0;		// total subscribers that got this event (-1 means it was veto'ed)
 	var evt;				// event object
 	var pri;				// collection of subscribers for a single priority
+	var min;
+	var max;
 	var priority;			// a priority value
 	var arr;				// array of subscribers for a single priority
 	var idx;				// index into array
-	var maxIdx;				// length of the array
 	var oneSub;				// one subscription-object
 	// 1) find event
 	evt = this._events[eventID];
 	if (evt) {
 		if (evt.subscribers && evt.subscribers.pri) {
-			pri = evt.subscribers.pri;
+			min = evt.subscribers.minPri;		// minimum priority to check
+			max = evt.subscribers.maxPri;		// maximum priority to check
+			pri = evt.subscribers.pri;			// array of subscribers ordered by priority
 			// walk every priority
-			maxIdx = pri.length;
-			for(priority=0; priority<maxIdx; priority++) {
+			for(priority=min; priority<=max; priority++) {
 				arr = pri[priority];
 				if (arr) {
 					// walk every subscription in this priority
@@ -435,9 +449,11 @@ UT.PubSub.prototype._createEvent = function(eventID) {
 		// not found, create the event
 		this._events[eventID] = {};
 		evt = this._events[eventID];
-		evt.subscribers = {};			// collection of functions to call-on-publish
-		evt.subscribers.pri = [];		// priority-ordered functions
-		//evt.vetoers = [];				// collection of functions to call-on-publish to check for veto (created on first veto added)
+		evt.subscribers = {};							// collection of functions to call-on-publish
+		evt.subscribers.pri = [];						// priority-ordered functions
+		evt.subscribers.minPri = this._maxPriAllowed;	// smallest priority of any subscribed-to event
+		evt.subscribers.maxPri = this._minPriAllowed;	// largest priority of any subscribed-to event
+		//evt.vetoers = [];								// collection of functions to call-on-publish to check for veto (created on first veto added)
 	}
 	return evt;
 };
