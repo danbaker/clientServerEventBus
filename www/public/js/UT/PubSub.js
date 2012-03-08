@@ -87,7 +87,7 @@ UT.PubSub.prototype.subscribe = function(eventID, fn, obj, priority) {
 
 	// create handle data to return
 	returnHandle = this.getNextHandle();
-	evtData = { priority:priority, eventID:eventID };	// eventID:eventID, priority:N
+	evtData = {priority:priority, eventID:eventID};	// eventID:eventID, priority:N
 	this._handles[returnHandle] = evtData;
 
 	// 1) find or create the event
@@ -97,7 +97,7 @@ UT.PubSub.prototype.subscribe = function(eventID, fn, obj, priority) {
 	if (!evt.subscribers.pri[priority]) {
 		evt.subscribers.pri[priority] = [];
 	}
-	evt.subscribers.pri[priority].push( { fn:fn, obj:obj, handle:returnHandle } );
+	evt.subscribers.pri[priority].push( {fn:fn, obj:obj, handle:returnHandle} );
 	// set min/max suscribed priorities
 	if (priority < evt.subscribers.minPri) evt.subscribers.minPri = priority;
 	if (priority > evt.subscribers.maxPri) evt.subscribers.maxPri = priority;
@@ -115,6 +115,48 @@ UT.PubSub.prototype.subscribeSlow = function(eventID) {
 	// 1) find or create the event
 	evt = this._createEvent(eventID);
 	evt.slow = true;
+};
+
+/**
+ * Subscribe to an event, knowing response time is slow (e.g. over a socket connection)
+ * @param {string} eventID  The eventID attach more classes to
+ * @param {string|Array.<string>} cls  The class (or classes) to attach to the eventID
+ */
+UT.PubSub.prototype.attachClassToEvent = function(eventID, cls) {
+	if (typeof cls === 'string') {
+		var evt;
+		// add this one class to this one event
+		evt = this._createEvent(eventID);
+		if (!evt.classes) {
+			evt.classes = {};				// collection of class names attached to this event
+		}
+		evt.classes[cls] = cls;				// classes.class1 = "class1"
+		// @TODO: IF this class is marked for "toSlow" then send this class over the slow
+	} else {
+		// iterate over the array, and add each single item
+		var i;
+		for(i=0; i<cls.length; i++) {
+			this.attachClassToEvent(eventID, cls[i]);
+		}
+	}
+};
+
+/**
+ * get the collection of classes attached to an eventID
+ * Note: the returned collection IS the actual event classes collection, please do not modify it
+ * @param {string} eventID  The eventID to get the collection of classes from
+ * @return {Object}  An object containing all classes attached to the event (or undefined if event not defined)
+ */
+UT.PubSub.prototype.getEventClasses = function(eventID) {
+	var evt;
+	evt = this._events[eventID];		// find the requeste event
+	if (!evt) {
+		return undefined;				// event does not exist, return undefined
+	}
+	if (evt.classes) {
+		return evt.classes;				// event exists and has classes attached, return them
+	}
+	return {};							// event exists but has no attached classes, return empty collection
 };
 
 /**
@@ -147,9 +189,9 @@ UT.PubSub.prototype.addVetoCheck = function(eventID, fn, obj) {
 		evt.vetoers = [];					// collection of functions to call-on-publish to check for veto
 	}
 	// 2) add to veto list
-	evt.vetoers.push( { fn:fn, obj:obj, handle:returnHandle } );
+	evt.vetoers.push( {fn:fn, obj:obj, handle:returnHandle} );
 	// 3) save data into handles map
-	evtData = { eventID:eventID, veto:true };	// eventID:eventID, veto:true
+	evtData = {eventID:eventID, veto:true};	// eventID:eventID, veto:true
 	this._handles[returnHandle] = evtData;
 	
 	return returnHandle;
@@ -308,9 +350,10 @@ this.log("publish: eventID="+eventID+"  check returned "+n);
  * publish/trigger/fire an event right now (assumes you already checked for veto)
  * @param {*} eventID  The event to cause/publish/trigger/fire right now
  * @param {*} args  argument with the event (usually a JSON object)
+ * @param {boolean} slowOnly  true means: do NOT publish to slowConnection (will be handled elsewhere)
  * @return {number}  The number of subscribers that got the event (0 means no one)
  */
-UT.PubSub.prototype.publishNow = function(eventID, args) {
+UT.PubSub.prototype.publishNow = function(eventID, args, localOnly) {
 	var returnN = 0;		// total subscribers that got this event (-1 means it was veto'ed)
 	var evt;				// event object
 	var pri;				// collection of subscribers for a single priority
@@ -342,8 +385,27 @@ UT.PubSub.prototype.publishNow = function(eventID, args) {
 				}
 			}
 		}
-		if (evt.slow && this._slowFn) {
+		if (evt.slow && this._slowFn && !localOnly) {
 			this._slowFn.call(this._slowObj, {publish:true}, eventID, args);
+			returnN += 1;
+		}
+	}
+	return returnN;
+};
+
+/**
+ * check if a given event will be published to the slowConnection
+ * @param {*} eventID  The event to check
+ * @param {*} args  argument with the event (usually a JSON object)
+ * @return {number}  0 means NOT sent to slowConnection.  1 means WILL publish to slowConnection
+ */
+UT.PubSub.prototype.checkPublishSlow = function(eventID, args, localOnly) {
+	var returnN = 0;		// total subscribers that got this event (-1 means it was veto'ed)
+	var evt;				// event object
+	// 1) find event
+	evt = this._events[eventID];
+	if (evt) {
+		if (evt.slow && this._slowFn) {
 			returnN += 1;
 		}
 	}
@@ -454,6 +516,7 @@ UT.PubSub.prototype._createEvent = function(eventID) {
 		evt.subscribers.minPri = this._maxPriAllowed;	// smallest priority of any subscribed-to event
 		evt.subscribers.maxPri = this._minPriAllowed;	// largest priority of any subscribed-to event
 		//evt.vetoers = [];								// collection of functions to call-on-publish to check for veto (created on first veto added)
+		//evt.classes = {};								// collection of class names attached to this event
 	}
 	return evt;
 };
@@ -479,55 +542,65 @@ UT.PubSub.prototype.debugDump = function() {
 	var priority;			// a priority value
 	var arr;				// array of subscribers for a single priority
 	var idx;				// index into array
+	var key;				// key in an object collection
 	var oneSub;				// one subscription-object
 	var handle;				// handle to a single subscription
 	var evtData;			// { eventID:eventID, priority: N }
 	// EVENTS
-	this.log("PubSub EVENTS:");
+	console.log("PubSub EVENTS:");
 	for(eventID in this._events) {
 		if (this._events.hasOwnProperty(eventID)) {
-			this.log(".. eventID:"+eventID);
+			console.log(".. eventID:"+eventID);
 			evt = this._events[eventID];
 			if (evt && evt.subscribers && evt.subscribers.pri) {
 				pri = evt.subscribers.pri;
 				// walk every priority
 				for(priority in pri) {
 					if (pri.hasOwnProperty(priority)) {
-						this.log(".. .. priority:"+priority);
+						console.log(".. .. priority:"+priority);
 						arr = pri[priority];
 						// walk every subscription in this priority
 						for(idx=0; idx<arr.length; idx++) {
 							oneSub = arr[idx];
-							this.log(".. .. .. "+idx+":  handle="+oneSub.handle);
+							console.log(".. .. .. "+idx+":  handle="+oneSub.handle);
 						}
 					}
 				}
 			}
+			if (evt && evt.classes) {
+				console.log(".. .. CLASSES:");
+				// walk collection of classes
+				for(key in evt.classes) {
+					if (evt.classes.hasOwnProperty(key)) {
+						console.log(".. .. .. "+key);
+					}
+				}
+			}
 			if (evt && evt.vetoers) {
-				this.log(".. .. VETOERS:");
+				console.log(".. .. VETOERS:");
 				arr = evt.vetoers;
-				// walk every subscription in this priority
+				// walk list of vetoers
 				for(idx=0; idx<arr.length; idx++) {
 					oneSub = arr[idx];
-					this.log(".. .. .. "+idx+":  handle="+oneSub.handle);
+					console.log(".. .. .. "+idx+":  handle="+oneSub.handle);
 				}
 			}
 			if (evt && evt.slow) {
-				this.log(".. .. PUBLISH TO SLOW");
+				console.log(".. .. PUBLISH TO SLOW");
 			}
 		}
 	}
 	// HANDLES
-	this.log("PubSub HANDLES:");
+	console.log("PubSub HANDLES:");
 	for(handle in this._handles) {
 		if (this._handles.hasOwnProperty(handle)) {
 			evtData = this._handles[handle];			// { eventID:eventID, priority: N }			
-			this.log(".. handle:"+handle+"  eventID="+evtData.eventID+"  priority="+evtData.priority+"  veto="+evtData.veto);
+			console.log(".. handle:"+handle+"  eventID="+evtData.eventID+"  priority="+evtData.priority+"  veto="+evtData.veto);
 		}
 	}
 	// OTHER
 	if (this._slowFn) {
-		this.log("PubSub has a slow-connection-delegate installed" + (this._slowObj? " with an object" : ""));
+		console.log("PubSub has a slow-connection-delegate installed" + (this._slowObj? " with an object" : ""));
 	}
 };
 UT.PubSub.prototype.log = function(msg) {

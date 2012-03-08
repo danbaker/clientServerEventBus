@@ -6,6 +6,8 @@
 Hello world
 <script>
 	var pb = new UT.PubSub.create();
+	var msg;
+	var key;
 	var n = pb.publish("EventA");
 	if (n !== 0) console.log("ERROR: published EventA appears to have been responded to");
 
@@ -27,7 +29,27 @@ Hello world
 		msgEventA += "3";
 	};
 
+	var cls = pb.getEventClasses("EventA");
+	console.log(cls);
+	if (cls) console.log("ERROR: EventA appears to have classes attached, but should NOT");
 	var han1 = pb.subscribe("EventA", fnEventA);
+	pb.attachClassToEvent("EventA", "class1");
+	pb.attachClassToEvent("EventA", ["class2", "class3", "class4", "class1"]);
+	pb.attachClassToEvent("EventA", "class4");
+	var cls = pb.getEventClasses("EventA");
+	if (!cls) console.log("ERROR: EventA appears to NOT have any classes attached, but should");
+	else {
+		n = 0;
+		msg = "";
+		for(key in cls) {
+			if (cls.hasOwnProperty(key)) {
+				n++;
+				msg += key+", ";
+			}
+		}
+		if (n !== 4) console.log("ERROR: EventA should have exactly 4 classes attached, but it had "+n+": "+msg);
+	}
+//	pb.debugDump();
 	n = pb.publish("EventA");
 	if (n !== 1) console.log("ERROR: published EventA appears to not have been responded to");
 	if (cntEventA !== 1) console.log("ERROR: EventA did not call fnEventA");
